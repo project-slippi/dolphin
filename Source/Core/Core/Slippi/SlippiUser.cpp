@@ -32,11 +32,6 @@ SlippiUser::~SlippiUser()
 
 bool SlippiUser::AttemptLogin()
 {
-  return slprs_user_attempt_login(slprs_exi_device_ptr);
-}
-
-bool SlippiUser::AttemptLogin()
-{
 	return slprs_user_attempt_login(slprs_exi_device_ptr);
 }
 
