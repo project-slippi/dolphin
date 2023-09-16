@@ -758,11 +758,11 @@ std::string GetBundleDirectory()
 std::string GetApplicationSupportDirectory()
 {
   std::string dir =
-      File::GetHomeDirectory() + "/Library/Application Support/com.project-slippi.dolphin";
+      File::GetHomeDirectory() + "/Library/Application Support/com.project-slippi.dolphin-beta";
 
   if (!CreateDir(dir))
   {
-    ERROR_LOG(COMMON, "Unable to create Application Support directory: %s:", dir.c_str());
+    ERROR_LOG_FMT(COMMON, "Unable to create Application Support directory: {}", dir);
   }
 
   return dir;
