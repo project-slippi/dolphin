@@ -547,7 +547,9 @@ void SlippiMatchmaking::handleMatchmaking()
         {
           player_info.chat_messages = m_user->GetDefaultChatMessages();
         }
-      } else {
+      }
+      else
+      {
         player_info.chat_messages = m_user->GetDefaultChatMessages();
       }
 
