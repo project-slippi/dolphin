@@ -11,9 +11,11 @@
 #include "Common/Logging/Log.h"
 #include "Common/MemoryUtil.h"
 #include "Common/MsgHandler.h"
+#include "Common/NATPMP.h"
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "Common/Version.h"
+#include "Common/UPnP.h"
 
 #include "AudioCommon/AudioCommon.h"
 
@@ -313,6 +315,13 @@ CEXISlippi::~CEXISlippi()
   // you'd have to be kinda dumb to do that sequence of stuff anyway so maybe it's nbd
   if (is_enet_initialized)
     enet_deinitialize();
+
+  // Unconditionally stop port mapping since it's possible to change the setting mid-game (after
+  // we've started port mapping).
+  NATPMP::StopPortmapping();
+#ifdef USE_UPNP
+  UPnP::StopPortmapping();
+#endif
 }
 
 void CEXISlippi::configureCommands(u8* payload, u8 length)

@@ -52,6 +52,8 @@ const Info<bool> SLIPPI_ENABLE_FRAME_INDEX{{System::Main, "Slippi", "EnableFrame
 const Info<bool> SLIPPI_BLOCKING_PIPES{{System::Main, "Slippi", "BlockingPipes"}, false};
 const Info<bool> SLIPPI_ENABLE_JUKEBOX{{System::Main, "Slippi", "EnableJukebox"}, true};
 const Info<int> SLIPPI_JUKEBOX_VOLUME{{System::Main, "Slippi", "JukeboxVolume"}, 100};
+const Info<Slippi::PortMapping> SLIPPI_PORT_MAPPING{{System::Main, "Slippi", "PortMapping"},
+                                                   Slippi::PortMapping::OFF};
 
 // Playback Settings
 const Info<bool> SLIPPI_ENABLE_SEEK{{System::Main, "Slippi", "EnableSeek"}, true};

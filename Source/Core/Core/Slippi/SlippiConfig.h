@@ -21,6 +21,13 @@ enum class Chat
   OFF
 };
 
+enum class PortMapping
+{
+  OFF,
+  UPNP,
+  NATPMP
+};
+
 struct Config
 {
   Melee::Version melee_version;

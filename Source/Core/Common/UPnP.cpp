@@ -54,11 +54,11 @@ static bool InitUPnP()
   {
     if (upnperror == UPNPDISCOVER_SUCCESS)
     {
-      WARN_LOG_FMT(NETPLAY, "No UPnP devices could be found.");
+      WARN_LOG_FMT(NETPLAY, "[UPnP] No UPnP devices could be found.");
     }
     else
     {
-      WARN_LOG_FMT(NETPLAY, "An error occurred trying to discover UPnP devices: {}",
+      WARN_LOG_FMT(NETPLAY, "[UPnP] An error occurred trying to discover UPnP devices: {}",
                    strupnperror(upnperror));
     }
 
@@ -91,17 +91,17 @@ static bool InitUPnP()
       GetUPNPUrls(&s_urls, &s_data, dev->descURL, 0);
 
       found_valid_igd = true;
-      NOTICE_LOG_FMT(NETPLAY, "Got info from IGD at {}.", dev->descURL);
+      NOTICE_LOG_FMT(NETPLAY, "[UPnP] Got info from IGD at {}.", dev->descURL);
       break;
     }
     else
     {
-      WARN_LOG_FMT(NETPLAY, "Error getting info from IGD at {}.", dev->descURL);
+      WARN_LOG_FMT(NETPLAY, "[UPnP] Error getting info from IGD at {}.", dev->descURL);
     }
   }
 
   if (!found_valid_igd)
-    WARN_LOG_FMT(NETPLAY, "Could not find a valid IGD in the discovered UPnP devices.");
+    WARN_LOG_FMT(NETPLAY, "[UPnP] Could not find a valid IGD in the discovered UPnP devices.");
 
   s_inited = true;
 
@@ -150,11 +150,11 @@ static void MapPortThread(const u16 port)
 {
   if (InitUPnP() && MapPort(s_our_ip.data(), port))
   {
-    NOTICE_LOG_FMT(NETPLAY, "Successfully mapped port {} to {}.", port, s_our_ip.data());
+    NOTICE_LOG_FMT(NETPLAY, "[UPnP] Successfully mapped port {} to {}.", port, s_our_ip.data());
     return;
   }
 
-  WARN_LOG_FMT(NETPLAY, "Failed to map port {} to {}.", port, s_our_ip.data());
+  WARN_LOG_FMT(NETPLAY, "[UPnP] Failed to map port {} to {}.", port, s_our_ip.data());
 }
 
 // UPnP thread: try to unmap a port
@@ -169,6 +169,12 @@ void UPnP::TryPortmapping(u16 port)
   if (s_thread.joinable())
     s_thread.join();
   s_thread = std::thread(&MapPortThread, port);
+}
+
+void UPnP::TryPortmappingBlocking(u16 port)
+{
+  TryPortmapping(port);
+  s_thread.join();
 }
 
 void UPnP::StopPortmapping()

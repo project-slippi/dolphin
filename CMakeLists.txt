@@ -709,6 +709,7 @@ add_subdirectory(Externals/semver)
 include_directories(Externals/semver/include)
 add_subdirectory(Externals/open-vcdiff)
 add_subdirectory(Externals/spirv_cross)
+add_subdirectory(Externals/libnatpmp)
 include_directories(Externals)
 
 if(ENABLE_VULKAN)

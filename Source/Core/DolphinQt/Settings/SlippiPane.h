@@ -47,6 +47,7 @@ private:
   // Online Settings
   QSpinBox* m_delay_spin;
   QComboBox* m_netplay_quick_chat_combo;
+  QComboBox* m_port_mapping_combo;
   QCheckBox* m_force_netplay_port;
   QSpinBox* m_netplay_port;
 

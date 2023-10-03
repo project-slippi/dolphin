@@ -83,6 +83,15 @@ void SlippiPane::CreateLayout()
   }
   online_settings_layout->addRow(tr("Quick Chat:"), m_netplay_quick_chat_combo);
 
+  m_port_mapping_combo = new QComboBox();
+  for (const auto& item : { tr("Off"), tr("UPnP"), tr("NAT-PMP") })
+  {
+    m_port_mapping_combo->addItem(item);
+  }
+  m_port_mapping_combo->setToolTip(tr("Enabling this may improve connecting to other players if UPnP or NAT-PMP is available on your router. "
+                                      "Do not use if you've already configured DMZ or port forwarding on your router."));
+  online_settings_layout->addRow(tr("Port Mapping: "), m_port_mapping_combo);
+
   m_netplay_port = new QSpinBox();
   m_netplay_port->setFixedSize(60, 25);
   QSizePolicy sp_retain = m_netplay_port->sizePolicy();
@@ -206,6 +215,8 @@ void SlippiPane::LoadConfig()
   m_netplay_quick_chat_combo->setCurrentIndex(
       static_cast<u8>(Config::Get(Config::SLIPPI_ENABLE_QUICK_CHAT)));
 
+  m_port_mapping_combo->setCurrentIndex(static_cast<u8>(Config::Get(Config::SLIPPI_PORT_MAPPING)));
+
   auto force_netplay_port = Config::Get(Config::SLIPPI_FORCE_NETPLAY_PORT);
   m_force_netplay_port->setChecked(force_netplay_port);
   m_netplay_port->setValue(Config::Get(Config::SLIPPI_NETPLAY_PORT));
@@ -240,6 +251,10 @@ void SlippiPane::ConnectLayout()
   connect(m_netplay_quick_chat_combo, qOverload<int>(&QComboBox::currentIndexChanged), this,
           [](int index) {
             Config::SetBase(Config::SLIPPI_ENABLE_QUICK_CHAT, static_cast<Slippi::Chat>(index));
+          });
+  connect(m_port_mapping_combo, qOverload<int>(&QComboBox::currentIndexChanged), this,
+          [](int index) {
+            Config::SetBase(Config::SLIPPI_PORT_MAPPING, static_cast<Slippi::PortMapping>(index));
           });
   connect(m_force_netplay_port, &QCheckBox::toggled, this, &SlippiPane::SetForceNetplayPort);
   connect(m_netplay_port, qOverload<int>(&QSpinBox::valueChanged), this,

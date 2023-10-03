@@ -69,6 +69,7 @@ extern const Info<bool> SLIPPI_ENABLE_FRAME_INDEX;
 extern const Info<bool> SLIPPI_BLOCKING_PIPES;
 extern const Info<bool> SLIPPI_ENABLE_JUKEBOX;
 extern const Info<int> SLIPPI_JUKEBOX_VOLUME;
+extern const Info<Slippi::PortMapping> SLIPPI_PORT_MAPPING;
 
 // Playback Settings
 extern const Info<bool> SLIPPI_ENABLE_SEEK;

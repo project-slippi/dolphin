@@ -4,8 +4,10 @@
 #include "Common/Common.h"
 #include "Common/ENetUtil.h"
 #include "Common/Logging/Log.h"
+#include "Common/NATPMP.h"
 #include "Common/StringUtil.h"
 #include "Common/Version.h"
+#include "Common/UPnP.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/ConfigManager.h"
 
@@ -309,6 +311,18 @@ void SlippiMatchmaking::startMatchmaking()
     ERROR_LOG_FMT(SLIPPI_ONLINE, "[Matchmaking] Failed to create client...");
     return;
   }
+
+  Slippi::PortMapping portMapping = Config::Get(Config::SLIPPI_PORT_MAPPING);
+  if (portMapping == Slippi::PortMapping::NATPMP)
+  {
+    NATPMP::TryPortmappingBlocking(m_host_port);
+  }
+#ifdef USE_UPNP
+  else if (portMapping == Slippi::PortMapping::UPNP)
+  {
+    UPnP::TryPortmappingBlocking(m_host_port);
+  }
+#endif
 
   ENetAddress addr;
   enet_address_set_host(&addr, MM_HOST.c_str());
