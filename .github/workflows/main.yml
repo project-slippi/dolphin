@@ -259,7 +259,7 @@ jobs:
             artifact_name: mainline-macOS-playback
             build_config: playback
     name: "macOS ${{ matrix.build_type }}"
-    runs-on: macos-11
+    runs-on: macos-12
     steps:
       - name: "Checkout"
         uses: actions/checkout@v3
