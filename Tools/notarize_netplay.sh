@@ -5,7 +5,7 @@
 # shouldn't be.
 
 version="$(echo $GIT_TAG)"
-identifier="com.project-slippi.dolphin"
+identifier="com.project-slippi.dolphin-beta"
 
 requeststatus() { # $1: requestUUID
     requestUUID=${1?:"need a request UUID"}
@@ -27,7 +27,7 @@ logstatus() { # $1: requestUUID
 notarizefile() { # $1: path to file to notarize, $2: identifier
     filepath=${1:?"need a filepath"}
     identifier=${2:?"need an identifier"}
-    
+
     # upload file
     echo "## uploading $filepath for notarization"
     requestUUID=$(xcrun altool --notarize-app \
@@ -36,14 +36,14 @@ notarizefile() { # $1: path to file to notarize, $2: identifier
         --apiIssuer "${APPLE_ISSUER_ID}" \
         --file "$filepath" 2>&1 \
     | awk '/RequestUUID/ { print $NF; }')
-                               
+
     echo "Notarization RequestUUID: $requestUUID"
-    
-    if [[ $requestUUID == "" ]]; then 
+
+    if [[ $requestUUID == "" ]]; then
         echo "could not upload for notarization"
         exit 1
     fi
-        
+
     # wait for status to be not "in progress" any more
     # Checks for up to ~10 minutes ((20 * 30s = 600) / 60s)
     for i ({0..20}); do
