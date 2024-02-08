@@ -30,12 +30,15 @@ notarizefile() { # $1: path to file to notarize, $2: identifier
 
     # upload file
     echo "## uploading $filepath for notarization"
-    requestUUID=$(xcrun altool --notarize-app \
+    xcrun_ret=$(xcrun altool --notarize-app \
         --primary-bundle-id "$identifier" \
         --apiKey "${APPLE_API_KEY}" \
         --apiIssuer "${APPLE_ISSUER_ID}" \
-        --file "$filepath" 2>&1 \
-    | awk '/RequestUUID/ { print $NF; }')
+        --file "$filepath" 2>&1)
+
+    echo $xcrun_ret
+
+    requestUUID=$(echo $xcrun_ret | awk '/RequestUUID/ { print $NF; }')
 
     echo "Notarization RequestUUID: $requestUUID"
 
