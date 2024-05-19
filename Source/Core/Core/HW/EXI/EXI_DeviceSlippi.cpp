@@ -3109,6 +3109,7 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
   {
     SlippiSpectateServer::getInstance().write(&mem_ptr[0], _uSize);
     g_need_input_for_frame = true;
+    return;
   }
 
   INFO_LOG_FMT(EXPANSIONINTERFACE,
