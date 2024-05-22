@@ -148,20 +148,24 @@ s32 PipeDevice::readFromPipe(PIPE_FD file_descriptor, char* in_buffer, size_t si
     }
   }
   return (s32)bytesread;
-#ifndef _WIN32
-  if (SConfig::GetInstance().m_blockingPipes)
-  {
+#else
+  return read(file_descriptor, in_buffer, size);
+#endif
+}
+
+void waitForInput(PIPE_FD file_descriptor)
+{
+  #ifdef _WIN32
+    // Not implemented yet.
+  #else
     fd_set set;
     FD_ZERO(&set);
     FD_SET(file_descriptor, &set);
 
     // Wait for activity on the socket
-    select(1, &set, NULL, NULL, NULL);
-  }
-#endif
-#else
-  return read(file_descriptor, in_buffer, size);
-#endif
+    // TODO: we should be using `poll` instead
+    select(file_descriptor+1, &set, NULL, NULL, NULL);
+  #endif
 }
 
 Core::DeviceRemoval PipeDevice::UpdateInput()
@@ -173,13 +177,26 @@ Core::DeviceRemoval PipeDevice::UpdateInput()
     // Read any pending characters off the pipe. If we hit a newline,
     // then dequeue a command off the front of m_buf and parse it.
     char buf[32];
-    std::size_t bytes_read =
-        readFromPipe(m_fd, buf, sizeof buf);  // slippi: confirm this still works for libmelee
-    while (bytes_read > 0)
+
+    // Avoids a busy loop if no data is present.
+    if (wait_for_input)
+      waitForInput(m_fd);
+
+    // Fill buffer with whatever data is present.
+    while (true)
     {
+      s32 bytes_read = readFromPipe(m_fd, buf, sizeof buf);
+
+      // -1 is technically an error, but can actually mean no data for
+      // non-blocking sockets; see https://man7.org/linux/man-pages/man2/read.2.html
+      // TODO: handle real errors
+      if (bytes_read <= 0)
+        break;
+
       m_buf.append(buf, bytes_read);
-      bytes_read = readFromPipe(m_fd, buf, sizeof buf);
     }
+
+    // Execute any commands given to us.
     std::size_t newline = m_buf.find("\n");
     while (newline != std::string::npos)
     {
