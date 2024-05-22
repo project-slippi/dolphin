@@ -52,7 +52,7 @@
 // #define CREATE_DIFF_FILES
 extern std::unique_ptr<SlippiPlaybackStatus> g_playback_status;
 extern std::unique_ptr<SlippiReplayComm> g_replay_comm;
-extern bool g_need_input_for_frame;
+bool g_need_input_for_frame;
 
 #ifdef LOCAL_TESTING
 bool is_local_connected = false;

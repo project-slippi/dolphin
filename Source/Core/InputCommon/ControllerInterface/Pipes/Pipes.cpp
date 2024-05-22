@@ -17,12 +17,12 @@
 
 #include <Core/Config/MainSettings.h>
 #include "Common/FileUtil.h"
+#include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Core/ConfigManager.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 
-// SLIPPITODO: Do we need to make this extern?
-bool g_need_input_for_frame;
+extern bool g_need_input_for_frame; // From EXI_DeviceSlippi.cpp
 
 namespace ciface::Pipes
 {
@@ -166,6 +166,7 @@ s32 PipeDevice::readFromPipe(PIPE_FD file_descriptor, char* in_buffer, size_t si
 
 Core::DeviceRemoval PipeDevice::UpdateInput()
 {
+  bool wait_for_input = Config::Get(Config::SLIPPI_BLOCKING_PIPES) && g_need_input_for_frame;
   bool finished = false;
   do
   {
@@ -183,11 +184,14 @@ Core::DeviceRemoval PipeDevice::UpdateInput()
     while (newline != std::string::npos)
     {
       std::string command = m_buf.substr(0, newline);
-      ParseCommand(command);
+      finished = ParseCommand(command);
       m_buf.erase(0, newline + 1);
       newline = m_buf.find("\n");
     }
-  } while (!finished && Config::Get(Config::SLIPPI_BLOCKING_PIPES));
+
+    // In blocking mode, we continue until a FLUSH command is given.
+  } while (wait_for_input && !finished);
+
   return Core::DeviceRemoval::Keep;
 }
 
@@ -216,21 +220,29 @@ void PipeDevice::SetAxis(const std::string& entry, double value)
     search_lo->second->SetState(lo);
 }
 
+// Returns whether commands for this frame are finished.
 bool PipeDevice::ParseCommand(const std::string& command)
 {
-  const std::vector<std::string> tokens = SplitString(command, ' ');
-  if (tokens.size() < 2 || tokens.size() > 4)
-    return false;
-  if (tokens[0] == "FLUSH")
+  if(command == "FLUSH")
   {
-    g_need_input_for_frame = false;
+    // Don't set g_need_input_for_frame = false here because other PipeDevices
+    // might not have been flushed yet. Instead, the flag will be cleared in
+    // ControllerInterface.cpp after UpdateInputs is called on all devices.
     return true;
   }
-  if (tokens[0] == "PRESS" || tokens[0] == "RELEASE")
+
+  bool valid = false;
+  const std::vector<std::string> tokens = SplitString(command, ' ');
+  if (tokens.size() < 2 || tokens.size() > 4)
+    valid = false;
+  else if (tokens[0] == "PRESS" || tokens[0] == "RELEASE")
   {
     auto search = m_buttons.find(tokens[1]);
     if (search != m_buttons.end())
+    {
       search->second->SetState(tokens[0] == "PRESS" ? 1.0 : 0.0);
+      valid = true;
+    }
   }
   else if (tokens[0] == "SET")
   {
@@ -238,6 +250,7 @@ bool PipeDevice::ParseCommand(const std::string& command)
     {
       double value = StringToDouble(tokens[2]);
       SetAxis(tokens[1], (value / 2.0) + 0.5);
+      valid = true;
     }
     else if (tokens.size() == 4)
     {
@@ -245,8 +258,13 @@ bool PipeDevice::ParseCommand(const std::string& command)
       double y = StringToDouble(tokens[3]);
       SetAxis(tokens[1] + " X", x);
       SetAxis(tokens[1] + " Y", y);
+      valid = true;
     }
   }
+
+  if (!valid)
+    WARN_LOG_FMT(SLIPPI, "Invalid command '{}'", command);
+
   return false;
 }
 }  // namespace ciface::Pipes
