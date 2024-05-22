@@ -263,12 +263,18 @@ bool PipeDevice::ParseCommand(const std::string& command)
   }
   else if (tokens[0] == "SET")
   {
+    // Analog L or R Trigger
     if (tokens.size() == 3)
     {
       double value = StringToDouble(tokens[2]);
+      // Note: inputs here are squashed into [0.5, 1], corresponding to the
+      // "ax_hi" PipeInput. The corresponding setting in GCPadNew.ini is
+      // "Triggers/L-Analog=Axis L +" (and same for R). If we didn't squash,
+      // users would instead use "Axis L -+" or "Full Axis +".
       SetAxis(tokens[1], (value / 2.0) + 0.5);
       valid = true;
     }
+    // Main or C Stick
     else if (tokens.size() == 4)
     {
       double x = StringToDouble(tokens[2]);
