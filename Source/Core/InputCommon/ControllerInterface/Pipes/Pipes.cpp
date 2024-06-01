@@ -22,7 +22,7 @@
 #include "Core/ConfigManager.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 
-extern bool g_need_input_for_frame; // From EXI_DeviceSlippi.cpp
+extern bool g_need_input_for_frame;  // From EXI_DeviceSlippi.cpp
 
 namespace ciface::Pipes
 {
@@ -155,17 +155,17 @@ s32 PipeDevice::readFromPipe(PIPE_FD file_descriptor, char* in_buffer, size_t si
 
 void waitForInput(PIPE_FD file_descriptor)
 {
-  #ifdef _WIN32
-    // Not implemented yet.
-  #else
-    fd_set set;
-    FD_ZERO(&set);
-    FD_SET(file_descriptor, &set);
+#ifdef _WIN32
+  // Not implemented yet.
+#else
+  fd_set set;
+  FD_ZERO(&set);
+  FD_SET(file_descriptor, &set);
 
-    // Wait for activity on the socket
-    // TODO: we should be using `poll` instead
-    select(file_descriptor+1, &set, NULL, NULL, NULL);
-  #endif
+  // Wait for activity on the socket
+  // TODO: we should be using `poll` instead
+  select(file_descriptor + 1, &set, NULL, NULL, NULL);
+#endif
 }
 
 Core::DeviceRemoval PipeDevice::UpdateInput()
@@ -240,7 +240,7 @@ void PipeDevice::SetAxis(const std::string& entry, double value)
 // Returns whether commands for this frame are finished.
 bool PipeDevice::ParseCommand(const std::string& command)
 {
-  if(command == "FLUSH")
+  if (command == "FLUSH")
   {
     // Don't set g_need_input_for_frame = false here because other PipeDevices
     // might not have been flushed yet. Instead, the flag will be cleared in

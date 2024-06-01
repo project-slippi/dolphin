@@ -38,7 +38,7 @@
 #endif
 
 ControllerInterface g_controller_interface;
-extern bool g_need_input_for_frame; // From EXI_DeviceSlippi.cpp
+extern bool g_need_input_for_frame;  // From EXI_DeviceSlippi.cpp
 
 // We need to save which input channel we are in by thread, so we can access the correct input
 // update values in different threads by input channel. We start from InputChannel::Host on all
