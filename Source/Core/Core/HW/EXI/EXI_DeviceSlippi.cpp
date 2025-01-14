@@ -1464,7 +1464,7 @@ bool CEXISlippi::shouldAdvanceOnlineFrame(s32 frame)
           std::min(-offset_us / (speed_up_frame_window * 16683.0f), 1.0f);
       deviation = frame_window_multiplier * max_speed_up_amount;
     }
-    else if (offset_us > 0)
+    else
     {
       // Here we are ahead, so let's slow down our instance
       float frame_window_multiplier =
