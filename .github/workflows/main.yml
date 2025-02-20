@@ -337,6 +337,23 @@ jobs:
             --hide-extension "Slippi_Dolphin.app" \
             "${{ env.FILE_NAME }}.dmg" \
             "./build/Binaries/"
+          if [ $? -ne 0 ];
+          then
+            sleep 30
+            ./Tools/create-dmg/run.sh --no-internet-enable \
+              --volname "Slippi Dolphin Beta Installer" \
+              --volicon "Data/slippi_dmg_icon.icns" \
+              --background "Data/slippi_dmg_background.png" \
+              --text-size 14 \
+              --window-pos 200 120 \
+              --window-size 590 610 \
+              --icon-size 100 \
+              --app-drop-link 440 196 \
+              --icon "Slippi_Dolphin.app" 140 196 \
+              --hide-extension "Slippi_Dolphin.app" \
+              "${{ env.FILE_NAME }}.dmg" \
+              "./build/Binaries/"
+          fi
           mv "${{ env.FILE_NAME }}.dmg" artifact/
       - name: "Sign and Notarize ${{ matrix.build_type }} Release DMG"
         if: env.CERTIFICATE_MACOS_APPLICATION != null
