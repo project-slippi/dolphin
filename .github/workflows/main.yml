@@ -77,7 +77,7 @@ jobs:
           path: |
             ./CodeSignTool/
           key: ${{ runner.os }}-${{ secrets.CACHE_CONTROL }}
-      - name: "Fetch Git Tags"
+      - name: 'Fetch Git Tags'
         shell: bash
         run: |
           git fetch --prune --unshallow
