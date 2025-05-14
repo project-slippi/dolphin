@@ -96,8 +96,8 @@ void SlippiSavestate::initBackupLocs()
       {0x804d77bc, 0x4},   // ???
       {0x804de7f0, 0x10},  // ???
 
-      // XFB Status
-      {0x804C1D7C, 0x4}
+      // XFB / VI Memory
+      {0x804c0980, 0x15F8},
 
       // Camera Blocks, Temporarily added here
       //{0x80452c7c, 0x2B0}, // Cam Block 1, including gaps
