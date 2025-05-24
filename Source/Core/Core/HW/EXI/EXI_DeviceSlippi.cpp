@@ -3294,6 +3294,22 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
       slprs_jukebox_set_melee_music_volume(slprs_exi_device_ptr, args.volume);
       break;
     }
+    case CMD_GET_RANK:
+    {
+      RustRankInfo* rankInfo = slprs_get_rank_info(slprs_exi_device_ptr);
+      m_read_queue.clear();
+      m_read_queue.push_back(rankInfo->rank);
+
+      appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rating_ordinal);
+
+      m_read_queue.push_back(rankInfo->global_placing);
+      m_read_queue.push_back(rankInfo->regional_placing);
+
+      appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rating_update_count);
+      appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rating_change);
+      appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rank_change);
+      break;
+    }
     default:
       writeToFileAsync(&mem_ptr[buf_loc], payload_len + 1, "");
       SlippiSpectateServer::getInstance().write(&mem_ptr[buf_loc], payload_len + 1);
