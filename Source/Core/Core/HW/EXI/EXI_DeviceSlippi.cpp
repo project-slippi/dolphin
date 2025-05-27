@@ -3298,6 +3298,8 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
     {
       RustRankInfo* rankInfo = slprs_get_rank_info(slprs_exi_device_ptr);
       m_read_queue.clear();
+
+      m_read_queue.push_back(rankInfo->status);
       m_read_queue.push_back(rankInfo->rank);
 
       appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rating_ordinal);
