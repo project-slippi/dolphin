@@ -2058,7 +2058,10 @@ void CEXISlippi::prepareOnlineMatchState()
     {
       auto match_info = slippi_netplay->GetMatchInfo();
 #ifdef LOCAL_TESTING
-      remote_players_ready = true;
+      if (match_info)
+      {
+        remote_players_ready = true;
+      }
 #else
       remote_players_ready = 1;
       u8 remote_player_count = matchmaking->RemotePlayerCount();
@@ -2109,7 +2112,7 @@ void CEXISlippi::prepareOnlineMatchState()
   u8 sent_chat_message_id = 0;
 
 #ifdef LOCAL_TESTING
-  local_player_idx = 0;
+  m_local_player_idx = 0;
   sent_chat_message_id = local_chat_message_id;
   chat_message_player_idx = 0;
   local_chat_message_id = 0;
