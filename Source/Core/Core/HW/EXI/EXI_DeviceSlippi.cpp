@@ -2009,6 +2009,7 @@ void CEXISlippi::prepareOnlineMatchState()
   u8 remote_players_ready = 0;
 
   auto user_info = user->GetUserInfo();
+  u16 alt_stage_mode = 0;
 
   if (mm_state == SlippiMatchmaking::ProcessState::CONNECTION_SUCCESS)
   {
@@ -2263,6 +2264,7 @@ void CEXISlippi::prepareOnlineMatchState()
 
       // Stage selected by this player, use that selection
       stage_id = selections->stage_id;
+      alt_stage_mode = selections->alt_stage_mode;
       break;
     }
 
@@ -2391,6 +2393,12 @@ void CEXISlippi::prepareOnlineMatchState()
     *game_bit_field3 = pause_allowed ? *game_bit_field3 & 0xF7 : *game_bit_field3 | 0x8;
     //*game_bit_field3 = *game_bit_field3 | 0x8;
 
+    // Overwrite alt_stage_mode if in ranked
+    if (!pause_allowed)
+    {
+      alt_stage_mode = 0;
+    }
+  
     // Group players into left/right side for team splash screen display
     for (int i = 0; i < 4; i++)
     {
@@ -2533,6 +2541,9 @@ void CEXISlippi::prepareOnlineMatchState()
   std::string match_id = recent_mm_result.id;
   match_id.resize(51);
   m_read_queue.insert(m_read_queue.end(), match_id.begin(), match_id.end());
+
+  // Add alt stage mode to output
+  m_read_queue.push_back(static_cast<u8>(alt_stage_mode));
 }
 
 u16 CEXISlippi::getRandomStage()
@@ -2565,6 +2576,7 @@ void CEXISlippi::setMatchSelections(u8* payload)
   s.stage_id = Common::swap16(&payload[4]);
   u8 stage_select_option = payload[6];
   // u8 online_mode = payload[7];
+  s.alt_stage_mode = payload[8];
 
   s.is_stage_selected = stage_select_option == 1 || stage_select_option == 3;
   if (stage_select_option == 3)
@@ -2573,9 +2585,9 @@ void CEXISlippi::setMatchSelections(u8* payload)
     s.stage_id = getRandomStage();
   }
 
-  INFO_LOG_FMT(SLIPPI, "LPS set char: {}, iSS: {}, {}, stage: {}, team: {}",
+  INFO_LOG_FMT(SLIPPI, "LPS set char: {}, iSS: {}, {}, stage: {}, alt stage: {}, team: {}",
                s.is_character_selected, stage_select_option, s.is_stage_selected, s.stage_id,
-               s.team_id);
+               s.alt_stage_mode, s.team_id);
 
   s.rng_offset = generator() % 0xFFFF;
 
