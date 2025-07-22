@@ -4,6 +4,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <set>
+
 #include "Common/CommonTypes.h"
 #include "Core/System.h"
 
