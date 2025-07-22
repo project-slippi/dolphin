@@ -1,5 +1,7 @@
 #include "SlippiGameFileLoader.h"
 
+#include <set>
+
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
