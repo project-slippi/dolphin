@@ -142,11 +142,11 @@ CEXISlippi::CEXISlippi(Core::System& system, const std::string current_file_name
 {
   INFO_LOG_FMT(SLIPPI, "EXI SLIPPI Constructor called.");
 
-  std::string user_file_path = File::GetUserPath(F_USERJSON_IDX);
+  std::string user_config_folder = File::GetUserPath(D_SLIPPI_IDX);
 
   SlippiRustEXIConfig slprs_exi_config;
   slprs_exi_config.iso_path = current_file_name.c_str();
-  slprs_exi_config.user_json_path = user_file_path.c_str();
+  slprs_exi_config.user_config_folder = user_config_folder.c_str();
   slprs_exi_config.scm_slippi_semver_str = Common::GetSemVerStr().c_str();
   slprs_exi_config.osd_add_msg_fn = OSDMessageHandler;
 
@@ -157,8 +157,8 @@ CEXISlippi::CEXISlippi(Core::System& system, const std::string current_file_name
   matchmaking = std::make_unique<SlippiMatchmaking>(user.get());
   game_file_loader = std::make_unique<SlippiGameFileLoader>();
   g_replay_comm = std::make_unique<SlippiReplayComm>();
-  direct_codes = std::make_unique<SlippiDirectCodes>("direct-codes.json");
-  teams_codes = std::make_unique<SlippiDirectCodes>("teams-codes.json");
+  direct_codes = std::make_unique<SlippiDirectCodes>(slprs_exi_device_ptr, SlippiDirectCodes::DIRECT);
+  teams_codes = std::make_unique<SlippiDirectCodes>(slprs_exi_device_ptr, SlippiDirectCodes::TEAMS);
 
   // initialize the spectate server so we can connect without starting a game
   SlippiSpectateServer::getInstance();
@@ -2009,6 +2009,7 @@ void CEXISlippi::prepareOnlineMatchState()
   u8 remote_players_ready = 0;
 
   auto user_info = user->GetUserInfo();
+  u16 alt_stage_mode = 0;
 
   if (mm_state == SlippiMatchmaking::ProcessState::CONNECTION_SUCCESS)
   {
@@ -2058,7 +2059,10 @@ void CEXISlippi::prepareOnlineMatchState()
     {
       auto match_info = slippi_netplay->GetMatchInfo();
 #ifdef LOCAL_TESTING
-      remote_players_ready = true;
+      if (match_info)
+      {
+        remote_players_ready = true;
+      }
 #else
       remote_players_ready = 1;
       u8 remote_player_count = matchmaking->RemotePlayerCount();
@@ -2109,7 +2113,7 @@ void CEXISlippi::prepareOnlineMatchState()
   u8 sent_chat_message_id = 0;
 
 #ifdef LOCAL_TESTING
-  local_player_idx = 0;
+  m_local_player_idx = 0;
   sent_chat_message_id = local_chat_message_id;
   chat_message_player_idx = 0;
   local_chat_message_id = 0;
@@ -2260,6 +2264,7 @@ void CEXISlippi::prepareOnlineMatchState()
 
       // Stage selected by this player, use that selection
       stage_id = selections->stage_id;
+      alt_stage_mode = selections->alt_stage_mode;
       break;
     }
 
@@ -2388,6 +2393,12 @@ void CEXISlippi::prepareOnlineMatchState()
     *game_bit_field3 = pause_allowed ? *game_bit_field3 & 0xF7 : *game_bit_field3 | 0x8;
     //*game_bit_field3 = *game_bit_field3 | 0x8;
 
+    // Overwrite alt_stage_mode if in ranked
+    if (!pause_allowed)
+    {
+      alt_stage_mode = 0;
+    }
+  
     // Group players into left/right side for team splash screen display
     for (int i = 0; i < 4; i++)
     {
@@ -2530,6 +2541,9 @@ void CEXISlippi::prepareOnlineMatchState()
   std::string match_id = recent_mm_result.id;
   match_id.resize(51);
   m_read_queue.insert(m_read_queue.end(), match_id.begin(), match_id.end());
+
+  // Add alt stage mode to output
+  m_read_queue.push_back(static_cast<u8>(alt_stage_mode));
 }
 
 u16 CEXISlippi::getRandomStage()
@@ -2562,6 +2576,7 @@ void CEXISlippi::setMatchSelections(u8* payload)
   s.stage_id = Common::swap16(&payload[4]);
   u8 stage_select_option = payload[6];
   // u8 online_mode = payload[7];
+  s.alt_stage_mode = payload[8];
 
   s.is_stage_selected = stage_select_option == 1 || stage_select_option == 3;
   if (stage_select_option == 3)
@@ -2570,9 +2585,9 @@ void CEXISlippi::setMatchSelections(u8* payload)
     s.stage_id = getRandomStage();
   }
 
-  INFO_LOG_FMT(SLIPPI, "LPS set char: {}, iSS: {}, {}, stage: {}, team: {}",
+  INFO_LOG_FMT(SLIPPI, "LPS set char: {}, iSS: {}, {}, stage: {}, alt stage: {}, team: {}",
                s.is_character_selected, stage_select_option, s.is_stage_selected, s.stage_id,
-               s.team_id);
+               s.alt_stage_mode, s.team_id);
 
   s.rng_offset = generator() % 0xFFFF;
 
