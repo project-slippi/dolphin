@@ -48,7 +48,7 @@
 #define SLEEP_TIME_MS 8
 #define WRITE_FILE_SLEEP_TIME_MS 85
 
-// #define LOCAL_TESTING
+ #define LOCAL_TESTING
 // #define CREATE_DIFF_FILES
 extern std::unique_ptr<SlippiPlaybackStatus> g_playback_status;
 extern std::unique_ptr<SlippiReplayComm> g_replay_comm;
@@ -2816,6 +2816,13 @@ void CEXISlippi::prepareOnlineStatus()
     version::Semver200_version current_version(Common::GetSemVerStr());
 
     app_state = latest_version > current_version ? 2 : 1;
+
+    if (!is_rank_initialized)
+    {
+      is_rank_initialized = true;
+      // Cache user rank after logging in
+      slprs_fetch_rank_info(slprs_exi_device_ptr);
+    }
   }
 
   m_read_queue.push_back(app_state);
