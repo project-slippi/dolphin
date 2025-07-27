@@ -2840,7 +2840,7 @@ void CEXISlippi::prepareOnlineStatus()
     {
       is_rank_initialized = true;
       // Cache user rank after logging in
-      //slprs_fetch_rank_info(slprs_exi_device_ptr);
+      slprs_fetch_rank_info(slprs_exi_device_ptr);
     }
   }
 
