@@ -48,7 +48,7 @@
 #define SLEEP_TIME_MS 8
 #define WRITE_FILE_SLEEP_TIME_MS 85
 
- #define LOCAL_TESTING
+#define LOCAL_TESTING
 // #define CREATE_DIFF_FILES
 extern std::unique_ptr<SlippiPlaybackStatus> g_playback_status;
 extern std::unique_ptr<SlippiReplayComm> g_replay_comm;
@@ -2108,6 +2108,8 @@ void CEXISlippi::prepareOnlineMatchState()
   std::string opp_name = "";
   std::string p1_ame = "";
   std::string p2_name = "";
+  u8 local_rank = 0;
+  u8 opp_rank = 0;
   u8 chat_message_id = 0;
   u8 chat_message_player_idx = 0;
   u8 sent_chat_message_id = 0;
@@ -2120,6 +2122,8 @@ void CEXISlippi::prepareOnlineMatchState()
   // in CSS p1 is always current player and p2 is opponent
   local_player_name = p1_ame = user_info.display_name;
   opp_name = p2_name = "Player 2";
+  local_rank = local_selections.rank;
+  opp_rank = 15;
 #endif
 
   SlippiDesyncRecoveryResp desync_recovery;
@@ -2428,6 +2432,16 @@ void CEXISlippi::prepareOnlineMatchState()
       u16* current_health = reinterpret_cast<u16*>(&online_match_block[0x70 + i * 0x24]);
       *current_health = Common::swap16(desync_recovery.state.fighters[i].current_health);
     }
+
+    bool is_ranked = last_search.mode == SlippiMatchmaking::OnlinePlayMode::RANKED;
+    if (is_ranked)
+    {
+      local_rank = local_selections.rank;
+      opp_rank = rps->rank;
+      #ifdef LOCAL_TESTING
+      opp_rank = 19;  // grandmaster
+      #endif
+    }
   }
 
   // Add rng offset to output
@@ -2440,6 +2454,10 @@ void CEXISlippi::prepareOnlineMatchState()
   m_read_queue.push_back(static_cast<u8>(sent_chat_message_id));
   m_read_queue.push_back(static_cast<u8>(chat_message_id));
   m_read_queue.push_back(static_cast<u8>(chat_message_player_idx));
+
+  // Add ranks
+  m_read_queue.push_back(static_cast<u8>(local_rank));
+  m_read_queue.push_back(static_cast<u8>(opp_rank));
 
   // Add player groupings for VS splash screen
   left_team_players.resize(4, 0);
@@ -2572,11 +2590,12 @@ void CEXISlippi::setMatchSelections(u8* payload)
   s.character_id = payload[1];
   s.character_color = payload[2];
   s.is_character_selected = payload[3];
+  s.rank = payload[4];
 
-  s.stage_id = Common::swap16(&payload[4]);
-  u8 stage_select_option = payload[6];
+  s.stage_id = Common::swap16(&payload[5]);
+  u8 stage_select_option = payload[7];
   // u8 online_mode = payload[7];
-  s.alt_stage_mode = payload[8];
+  s.alt_stage_mode = payload[9];
 
   s.is_stage_selected = stage_select_option == 1 || stage_select_option == 3;
   if (stage_select_option == 3)
@@ -2585,9 +2604,9 @@ void CEXISlippi::setMatchSelections(u8* payload)
     s.stage_id = getRandomStage();
   }
 
-  INFO_LOG_FMT(SLIPPI, "LPS set char: {}, iSS: {}, {}, stage: {}, alt stage: {}, team: {}",
+  INFO_LOG_FMT(SLIPPI, "LPS set char: {}, iSS: {}, {}, stage: {}, alt stage: {}, team: {}, rank: {}",
                s.is_character_selected, stage_select_option, s.is_stage_selected, s.stage_id,
-               s.alt_stage_mode, s.team_id);
+               s.alt_stage_mode, s.team_id, s.rank);
 
   s.rng_offset = generator() % 0xFFFF;
 
@@ -2821,7 +2840,7 @@ void CEXISlippi::prepareOnlineStatus()
     {
       is_rank_initialized = true;
       // Cache user rank after logging in
-      slprs_fetch_rank_info(slprs_exi_device_ptr);
+      //slprs_fetch_rank_info(slprs_exi_device_ptr);
     }
   }
 
@@ -2945,6 +2964,9 @@ void CEXISlippi::handleReportGame(const SlippiExiTypes::ReportGameQuery& query)
                                    color_id, starting_stocks, starting_percent);
 
     slprs_game_report_add_player_report(game_report, player_report);
+
+    // Increment total matches played this session, for checking match report on CSS
+    rank_matches_played++;
   }
 
   // If ranked mode and the game ended with a quit out, this is either a desync or an interrupted
@@ -3321,7 +3343,17 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
       RustRankInfo* rankInfo = slprs_get_rank_info(slprs_exi_device_ptr);
       m_read_queue.clear();
 
-      m_read_queue.push_back(rankInfo->status);
+      int request_status = rankInfo->status;
+      int update_count = rankInfo->rating_update_count;
+      if (update_count < rank_matches_played)
+      {
+        // Match has not been reported
+        request_status = 1;
+      }
+
+      // DEBUG
+      //request_status = 1;
+      m_read_queue.push_back(request_status);
       m_read_queue.push_back(rankInfo->rank);
 
       appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rating_ordinal);
@@ -3332,6 +3364,11 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
       appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rating_update_count);
       appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rating_change);
       appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rank_change);
+      break;
+    }
+    case CMD_FETCH_RANK:
+    {
+      slprs_fetch_rank_info(slprs_exi_device_ptr);
       break;
     }
     default:

@@ -108,6 +108,7 @@ private:
     CMD_PREMADE_TEXT_LENGTH = 0xE1,
     CMD_PREMADE_TEXT_LOAD = 0xE2,
     CMD_GET_RANK = 0xE3,
+    CMD_FETCH_RANK = 0xE4
   };
 
   enum
@@ -170,7 +171,8 @@ private:
        static_cast<u32>(sizeof(SlippiExiTypes::ChangeMusicVolumeQuery) - 1)},
       {CMD_PREMADE_TEXT_LENGTH, 0x2},
       {CMD_PREMADE_TEXT_LOAD, 0x2},
-      {CMD_GET_RANK, 16},
+      {CMD_GET_RANK, 0x0},
+      {CMD_FETCH_RANK, 0x0}
   };
 
   struct WriteMessage
@@ -307,7 +309,9 @@ private:
   int fall_behind_counter = 0;
   int fall_far_behind_counter = 0;
 
+  // Rank info variables
   bool is_rank_initialized = false;
+  int rank_matches_played = 0;
 
 protected:
   void TransferByte(u8& byte) override;
