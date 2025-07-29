@@ -3343,11 +3343,11 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
       RustRankInfo* rankInfo = slprs_get_rank_info(slprs_exi_device_ptr);
       m_read_queue.clear();
 
-
       SlippiRankStatus request_status = SlippiRankStatus::Successful;
       // Determine if rank data has been properly reported
       int update_count = rankInfo->rating_update_count;
-      if (update_count < rank_matches_played)
+      s8 rank = rankInfo->rank;
+      if (rank < 0 || update_count < rank_matches_played)
       {
         // Match has not been reported
         request_status = SlippiRankStatus::Unreported;
