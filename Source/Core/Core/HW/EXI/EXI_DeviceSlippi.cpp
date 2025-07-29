@@ -3343,27 +3343,34 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
       RustRankInfo* rankInfo = slprs_get_rank_info(slprs_exi_device_ptr);
       m_read_queue.clear();
 
-      int request_status = rankInfo->status;
+
+      SlippiRankStatus request_status = SlippiRankStatus::Successful;
+      // Determine if rank data has been properly reported
       int update_count = rankInfo->rating_update_count;
       if (update_count < rank_matches_played)
       {
         // Match has not been reported
-        request_status = 1;
+        request_status = SlippiRankStatus::Unreported;
       }
 
-      // DEBUG
-      //request_status = 1;
-      m_read_queue.push_back(request_status);
-      m_read_queue.push_back(rankInfo->rank);
+      // Determine rank info visibility
+      bool local_rank_enabled = Config::Get(Config::SLIPPI_ENABLE_RANK_LOCAL);
+      bool opp_rank_enabled = Config::Get(Config::SLIPPI_ENABLE_RANK_OPP);
+      u8 rank_visibility = ((1 << SlippiRankVisibility::Local) * local_rank_enabled) |
+                           ((1 << SlippiRankVisibility::Opponent) * opp_rank_enabled);
 
+      // Push rank data header
+      m_read_queue.push_back((u8)rank_visibility);
+      m_read_queue.push_back((u8)request_status);
+
+      // Push rank data
+      m_read_queue.push_back(*(u8*)&rankInfo->rank);
       appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rating_ordinal);
-
       m_read_queue.push_back(rankInfo->global_placing);
       m_read_queue.push_back(rankInfo->regional_placing);
-
       appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rating_update_count);
       appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rating_change);
-      appendWordToBuffer(&m_read_queue, *(u32*)&rankInfo->rank_change);
+      m_read_queue.push_back(*(u8*)&rankInfo->rank_change);
       break;
     }
     case CMD_FETCH_RANK:

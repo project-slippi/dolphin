@@ -108,7 +108,8 @@ private:
     CMD_PREMADE_TEXT_LENGTH = 0xE1,
     CMD_PREMADE_TEXT_LOAD = 0xE2,
     CMD_GET_RANK = 0xE3,
-    CMD_FETCH_RANK = 0xE4
+    CMD_FETCH_RANK = 0xE4,
+    CMD_GET_RANK_VISIBILITY = 0xE5
   };
 
   enum
@@ -172,7 +173,8 @@ private:
       {CMD_PREMADE_TEXT_LENGTH, 0x2},
       {CMD_PREMADE_TEXT_LOAD, 0x2},
       {CMD_GET_RANK, 0x0},
-      {CMD_FETCH_RANK, 0x0}
+      {CMD_FETCH_RANK, 0x0},
+      {CMD_GET_RANK_VISIBILITY, 0x0}
   };
 
   struct WriteMessage

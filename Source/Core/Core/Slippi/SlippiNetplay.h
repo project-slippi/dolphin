@@ -75,6 +75,18 @@ struct SlippiDesyncRecoveryResp
   SlippiSyncedGameState state;
 };
 
+enum SlippiRankVisibility
+{
+  Local,
+  Opponent
+};
+
+enum SlippiRankStatus
+{
+  Unreported,
+  Successful
+};
+
 class SlippiPlayerSelections
 {
 public:
