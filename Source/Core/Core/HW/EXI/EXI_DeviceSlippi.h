@@ -256,6 +256,7 @@ private:
   void handleCompleteSet(const SlippiExiTypes::ReportSetCompletionQuery& query);
   void handleMatchStatusUpdate(const SlippiExiTypes::ReportMatchStatusUpdateQuery& query);
   void handleGetPlayerSettings();
+  void handleGetRank();
 
   // replay playback stuff
   void prepareGameInfo(u8* payload);
