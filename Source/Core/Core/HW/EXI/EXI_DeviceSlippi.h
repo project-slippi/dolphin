@@ -333,6 +333,7 @@ private:
 
   // Rank info variables
   bool is_rank_initialized = false;
+  bool is_returning_from_match = false;
   int rank_matches_played = 0;
 
 protected:
