@@ -2842,7 +2842,7 @@ void CEXISlippi::prepareOnlineStatus()
     {
       is_rank_initialized = true;
       // Cache user rank after logging in
-      //   slprs_fetch_rank_info(slprs_exi_device_ptr);
+      slprs_fetch_rank_info(slprs_exi_device_ptr);
     }
   }
 
@@ -2926,6 +2926,7 @@ void CEXISlippi::handleReportGame(const SlippiExiTypes::ReportGameQuery& query)
   s8 lras_initiator = query.lras_initiator;
 
   is_returning_from_match = true;
+  rank_matches_played++;
 
   ERROR_LOG_FMT(SLIPPI_ONLINE,
                 "Mode: {} / {}, Frames: {}, GameIdx: {}, TiebreakIdx: {}, WinnerIdx: {}, StageId: "
@@ -3176,22 +3177,29 @@ void CEXISlippi::handleGetRank()
   SlippiRankStatus request_status =
       rankInfo.rank > -1 ? SlippiRankStatus::Successful : SlippiRankStatus::Unreported;
 
-  // Determine if rank data has been properly reported
   int update_count = rankInfo.rating_update_count;
+  if (rank_matches_played < 0)
+  {
+    // Initialize local matches played
+    rank_matches_played = update_count;
+    INFO_LOG_FMT(SLIPPI_ONLINE, "Initializing local match count: {}", rank_matches_played);
+  }
+
   if (is_returning_from_match)
   {
-    INFO_LOG_FMT(SLIPPI_ONLINE, "Returning from a ranked match...");
-    INFO_LOG_FMT(SLIPPI_ONLINE, "prev match count: {}, current match count: {}",
-                 rank_matches_played, update_count);
-    if (update_count == rank_matches_played)
+    if (rank_matches_played > update_count)
     {
       INFO_LOG_FMT(SLIPPI_ONLINE, "Last match has not been reported...");
+      INFO_LOG_FMT(SLIPPI_ONLINE, "local match count: {}, fetched match count: {}",
+                   rank_matches_played, update_count);
       // Match has not been reported
       request_status = SlippiRankStatus::Unreported;
     }
-    // Update ranked state
-    rank_matches_played = update_count;
-    is_returning_from_match = false;
+    else
+    {
+      // Update ranked state once up-to-date rank info has been fetched
+      is_returning_from_match = false;
+    }
   }
 
   // Determine rank info visibility
