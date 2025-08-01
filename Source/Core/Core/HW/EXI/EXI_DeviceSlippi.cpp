@@ -156,8 +156,7 @@ CEXISlippi::CEXISlippi(Core::System& system, const std::string current_file_name
   matchmaking = std::make_unique<SlippiMatchmaking>(slprs_exi_device_ptr, user.get());
   game_file_loader = std::make_unique<SlippiGameFileLoader>();
   g_replay_comm = std::make_unique<SlippiReplayComm>();
-  direct_codes =
-      std::make_unique<SlippiDirectCodes>(slprs_exi_device_ptr, SlippiDirectCodes::DIRECT);
+  direct_codes = std::make_unique<SlippiDirectCodes>(slprs_exi_device_ptr, SlippiDirectCodes::DIRECT);
   teams_codes = std::make_unique<SlippiDirectCodes>(slprs_exi_device_ptr, SlippiDirectCodes::TEAMS);
 
   // initialize the spectate server so we can connect without starting a game
@@ -296,8 +295,7 @@ CEXISlippi::~CEXISlippi()
   if (active_match_id.find("mode.ranked") != std::string::npos)
   {
     ERROR_LOG_FMT(SLIPPI_ONLINE, "Exit during in-progress ranked game: {}", active_match_id);
-    slprs_exi_device_report_match_status(slprs_exi_device_ptr, active_match_id.c_str(), "abandoned",
-                                         false);
+    slprs_exi_device_report_match_status(slprs_exi_device_ptr, active_match_id.c_str(), "abandoned", false);
   }
   handleConnectionCleanup();
 
@@ -1423,7 +1421,7 @@ bool CEXISlippi::shouldAdvanceOnlineFrame(s32 frame)
   // If the opponent is a bot running ahead to give us more inputs, we should
   // just keep going at our own pace rather than trying to catch up.
   if (opponentRunahead())
-    return false;
+     return false;
 
   // Logic below is used to test frame advance by forcing it more often
   // SConfig::GetInstance().m_EmulationSpeed = 0.5f;
@@ -2403,7 +2401,7 @@ void CEXISlippi::prepareOnlineMatchState()
     {
       alt_stage_mode = 0;
     }
-
+  
     // Group players into left/right side for team splash screen display
     for (int i = 0; i < 4; i++)
     {
@@ -2439,9 +2437,9 @@ void CEXISlippi::prepareOnlineMatchState()
     {
       local_rank = local_selections.rank;
       opp_rank = rps->rank;
-#ifdef LOCAL_TESTING
+      #ifdef LOCAL_TESTING
       opp_rank = 19;  // grandmaster
-#endif
+      #endif
     }
   }
 
@@ -2605,8 +2603,7 @@ void CEXISlippi::setMatchSelections(u8* payload)
     s.stage_id = getRandomStage();
   }
 
-  INFO_LOG_FMT(SLIPPI,
-               "LPS set char: {}, iSS: {}, {}, stage: {}, alt stage: {}, team: {}, rank: {}",
+  INFO_LOG_FMT(SLIPPI, "LPS set char: {}, iSS: {}, {}, stage: {}, alt stage: {}, team: {}, rank: {}",
                s.is_character_selected, stage_select_option, s.is_stage_selected, s.stage_id,
                s.alt_stage_mode, s.team_id, s.rank);
 
@@ -2842,7 +2839,7 @@ void CEXISlippi::prepareOnlineStatus()
     {
       is_rank_initialized = true;
       // Cache user rank after logging in
-      //   slprs_fetch_rank_info(slprs_exi_device_ptr);
+      slprs_fetch_rank_info(slprs_exi_device_ptr);
     }
   }
 
@@ -2925,8 +2922,6 @@ void CEXISlippi::handleReportGame(const SlippiExiTypes::ReportGameQuery& query)
   u8 game_end_method = query.game_end_method;
   s8 lras_initiator = query.lras_initiator;
 
-  is_returning_from_match = true;
-
   ERROR_LOG_FMT(SLIPPI_ONLINE,
                 "Mode: {} / {}, Frames: {}, GameIdx: {}, TiebreakIdx: {}, WinnerIdx: {}, StageId: "
                 "{}, GameEndMethod: {}, "
@@ -2968,6 +2963,9 @@ void CEXISlippi::handleReportGame(const SlippiExiTypes::ReportGameQuery& query)
                                    color_id, starting_stocks, starting_percent);
 
     slprs_game_report_add_player_report(game_report, player_report);
+
+    // Increment total matches played this session, for checking match report on CSS
+    rank_matches_played++;
   }
 
   // If ranked mode and the game ended with a quit out, this is either a desync or an interrupted
@@ -3116,8 +3114,8 @@ void CEXISlippi::handleMatchStatusUpdate(const SlippiExiTypes::ReportMatchStatus
 
   auto status_string = statusMapRes->second;
 
-  INFO_LOG_FMT(SLIPPI_ONLINE, "Reporting match status update: {}, Status: {}",
-               last_match_id.c_str(), status_string.c_str());
+  INFO_LOG_FMT(SLIPPI_ONLINE, "Reporting match status update: {}, Status: {}", last_match_id.c_str(),
+           status_string.c_str());
 
   // Report asynchronously when called from the game
   slprs_exi_device_report_match_status(slprs_exi_device_ptr, last_match_id.c_str(),
@@ -3172,26 +3170,14 @@ void CEXISlippi::handleGetRank()
   RustRankInfo rankInfo = slprs_get_rank_info(slprs_exi_device_ptr);
   m_read_queue.clear();
 
-  // Status is successful by default if rank is valid
-  SlippiRankStatus request_status =
-      rankInfo.rank > -1 ? SlippiRankStatus::Successful : SlippiRankStatus::Unreported;
-
+  SlippiRankStatus request_status = SlippiRankStatus::Successful;
   // Determine if rank data has been properly reported
   int update_count = rankInfo.rating_update_count;
-  if (is_returning_from_match)
+  s8 rank = rankInfo.rank;
+  if (rank < 0 || update_count < rank_matches_played)
   {
-    INFO_LOG_FMT(SLIPPI_ONLINE, "Returning from a ranked match...");
-    INFO_LOG_FMT(SLIPPI_ONLINE, "prev match count: {}, current match count: {}",
-                 rank_matches_played, update_count);
-    if (update_count == rank_matches_played)
-    {
-      INFO_LOG_FMT(SLIPPI_ONLINE, "Last match has not been reported...");
-      // Match has not been reported
-      request_status = SlippiRankStatus::Unreported;
-    }
-    // Update ranked state
-    rank_matches_played = update_count;
-    is_returning_from_match = false;
+    // Match has not been reported
+    request_status = SlippiRankStatus::Unreported;
   }
 
   // Determine rank info visibility
@@ -3394,7 +3380,7 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
       break;
     case CMD_REPORT_MATCH_STATUS_UPDATE:
       handleMatchStatusUpdate(
-          SlippiExiTypes::Convert<SlippiExiTypes::ReportMatchStatusUpdateQuery>(&mem_ptr[buf_loc]));
+        SlippiExiTypes::Convert<SlippiExiTypes::ReportMatchStatusUpdateQuery>(&mem_ptr[buf_loc]));
       break;
     case CMD_GET_PLAYER_SETTINGS:
       handleGetPlayerSettings();
@@ -3479,13 +3465,13 @@ void CEXISlippi::ConfigureJukebox()
   }
 #endif
 
-  if (backend.find(BACKEND_NULLSOUND) != std::string::npos)
-  {
+  if (backend.find(BACKEND_NULLSOUND) != std::string::npos) {
     return;
   }
 
-  int dolphin_system_volume =
-      Config::Get(Config::MAIN_AUDIO_MUTED) ? 0 : Config::Get(Config::MAIN_AUDIO_VOLUME);
+  int dolphin_system_volume = Config::Get(Config::MAIN_AUDIO_MUTED) ?
+                                  0 :
+                                  Config::Get(Config::MAIN_AUDIO_VOLUME);
 
   int dolphin_music_volume = Config::Get(Config::SLIPPI_JUKEBOX_VOLUME);
 
