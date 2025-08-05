@@ -235,7 +235,7 @@ static std::string GetTimeForFrame(s32 currFrame)
   int currMinutes = (int)(currSeconds / 60);
   int currRemainder = (int)(currSeconds % 60);
   // Position string (i.e. MM:SS)
-  char currTime[6];
+  char currTime[16];  // appease compiler format-overflow warning
   sprintf(currTime, "%02d:%02d", currMinutes, currRemainder);
   return std::string(currTime);
 }

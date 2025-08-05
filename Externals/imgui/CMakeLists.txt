@@ -20,6 +20,8 @@ target_compile_definitions(imgui
   PUBLIC
     IMGUI_DEFINE_MATH_OPERATORS
 )
+# Disable interprocedural scalar replacement to make template instantiations globally visible
+target_compile_options(imgui PRIVATE -fno-ipa-sra)
 
 target_link_libraries(imgui
 PRIVATE
