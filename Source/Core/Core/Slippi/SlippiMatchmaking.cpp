@@ -557,7 +557,7 @@ void SlippiMatchmaking::handleMatchmaking()
         player_info.chat_messages = m_user->GetDefaultChatMessages();
       }
 
-      json rank_el = el.value("rank", "");
+      json rank_el = el["rank"];
       if (rank_el.is_object())
       {
         player_info.ranked_rating = rank_el.value("rating", 0.0);
