@@ -2431,16 +2431,6 @@ void CEXISlippi::prepareOnlineMatchState()
       u16* current_health = reinterpret_cast<u16*>(&online_match_block[0x70 + i * 0x24]);
       *current_health = Common::swap16(desync_recovery.state.fighters[i].current_health);
     }
-
-    bool is_ranked = last_search.mode == SlippiMatchmaking::OnlinePlayMode::RANKED;
-    if (is_ranked)
-    {
-      local_rank = local_selections.rank;
-      opp_rank = rps->rank;
-      #ifdef LOCAL_TESTING
-      opp_rank = 19;  // grandmaster
-      #endif
-    }
   }
 
   // Add rng offset to output
@@ -2453,6 +2443,15 @@ void CEXISlippi::prepareOnlineMatchState()
   m_read_queue.push_back(static_cast<u8>(sent_chat_message_id));
   m_read_queue.push_back(static_cast<u8>(chat_message_id));
   m_read_queue.push_back(static_cast<u8>(chat_message_player_idx));
+
+  bool is_ranked = last_search.mode == SlippiMatchmaking::OnlinePlayMode::RANKED;
+  if (is_ranked)
+  {
+    // TODO: Get these ranks from the mm service
+    // This has to be outside the player ready block because in game setup 2 the players are not ready at the start
+    local_rank = 12;
+    opp_rank = 19;
+  }
 
   // Add ranks
   m_read_queue.push_back(static_cast<u8>(local_rank));
@@ -2589,12 +2588,11 @@ void CEXISlippi::setMatchSelections(u8* payload)
   s.character_id = payload[1];
   s.character_color = payload[2];
   s.is_character_selected = payload[3];
-  s.rank = payload[4];
 
-  s.stage_id = Common::swap16(&payload[5]);
-  u8 stage_select_option = payload[7];
+  s.stage_id = Common::swap16(&payload[4]);
+  u8 stage_select_option = payload[6];
   // u8 online_mode = payload[7];
-  s.alt_stage_mode = payload[9];
+  s.alt_stage_mode = payload[8];
 
   s.is_stage_selected = stage_select_option == 1 || stage_select_option == 3;
   if (stage_select_option == 3)
@@ -2603,9 +2601,9 @@ void CEXISlippi::setMatchSelections(u8* payload)
     s.stage_id = getRandomStage();
   }
 
-  INFO_LOG_FMT(SLIPPI, "LPS set char: {}, iSS: {}, {}, stage: {}, alt stage: {}, team: {}, rank: {}",
+  INFO_LOG_FMT(SLIPPI, "LPS set char: {}, iSS: {}, {}, stage: {}, alt stage: {}, team: {}",
                s.is_character_selected, stage_select_option, s.is_stage_selected, s.stage_id,
-               s.alt_stage_mode, s.team_id, s.rank);
+               s.alt_stage_mode, s.team_id);
 
   s.rng_offset = generator() % 0xFFFF;
 
@@ -3167,18 +3165,8 @@ void CEXISlippi::handleGetPlayerSettings()
 
 void CEXISlippi::handleGetRank()
 {
-  RustRankInfo rankInfo = slprs_get_rank_info(slprs_exi_device_ptr);
+  RustRankInfo rank_info = slprs_get_rank_info(slprs_exi_device_ptr);
   m_read_queue.clear();
-
-  SlippiRankStatus request_status = SlippiRankStatus::Successful;
-  // Determine if rank data has been properly reported
-  int update_count = rankInfo.rating_update_count;
-  s8 rank = rankInfo.rank;
-  if (rank < 0 || update_count < rank_matches_played)
-  {
-    // Match has not been reported
-    request_status = SlippiRankStatus::Unreported;
-  }
 
   // Determine rank info visibility
   bool local_rank_enabled = Config::Get(Config::SLIPPI_ENABLE_RANK_LOCAL);
@@ -3188,16 +3176,16 @@ void CEXISlippi::handleGetRank()
 
   // Push rank data header
   m_read_queue.push_back(rank_visibility);
-  m_read_queue.push_back(static_cast<u8>(request_status));
+  m_read_queue.push_back(static_cast<u8>(rank_info.fetch_status));
+
+  //ERROR_LOG_FMT(SLIPPI_ONLINE, "Update count: {}", rank_info.rating_update_count);
 
   // Push rank data
-  m_read_queue.push_back(static_cast<u8>(rankInfo.rank));
-  appendWordToBuffer(&m_read_queue, std::bit_cast<u32>(rankInfo.rating_ordinal));
-  m_read_queue.push_back(rankInfo.global_placing);
-  m_read_queue.push_back(rankInfo.regional_placing);
-  appendWordToBuffer(&m_read_queue, static_cast<u8>(rankInfo.rating_update_count));
-  appendWordToBuffer(&m_read_queue, std::bit_cast<u32>(rankInfo.rating_change));
-  m_read_queue.push_back(static_cast<u8>(rankInfo.rank_change));
+  m_read_queue.push_back(static_cast<u8>(rank_info.rank));
+  appendWordToBuffer(&m_read_queue, std::bit_cast<u32>(rank_info.rating_ordinal));
+  appendWordToBuffer(&m_read_queue, static_cast<u32>(rank_info.rating_update_count));
+  appendWordToBuffer(&m_read_queue, std::bit_cast<u32>(rank_info.rating_change));
+  m_read_queue.push_back(static_cast<u8>(rank_info.rank_change));
 }
 
 void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)

@@ -543,7 +543,6 @@ void SlippiNetplayClient::writeToPacket(sf::Packet& packet, SlippiPlayerSelectio
   packet << s.stage_id << s.is_stage_selected;
   packet << s.rng_offset;
   packet << s.team_id;
-  packet << s.rank;
   packet << s.alt_stage_mode;
 }
 
@@ -653,11 +652,6 @@ SlippiNetplayClient::readSelectionsFromPacket(sf::Packet& packet)
     s->error = true;
   }
   if (!(packet >> s->alt_stage_mode))
-  {
-    ERROR_LOG_FMT(SLIPPI_ONLINE, "Received invalid player selection");
-    s->error = true;
-  }
-  if (!(packet >> s->rank))
   {
     ERROR_LOG_FMT(SLIPPI_ONLINE, "Received invalid player selection");
     s->error = true;
