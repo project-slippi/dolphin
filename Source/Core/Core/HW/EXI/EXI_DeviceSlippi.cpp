@@ -2447,10 +2447,9 @@ void CEXISlippi::prepareOnlineMatchState()
   bool is_ranked = last_search.mode == SlippiMatchmaking::OnlinePlayMode::RANKED;
   if (is_ranked)
   {
-    // TODO: Get these ranks from the mm service
     // This has to be outside the player ready block because in game setup 2 the players are not ready at the start
-    local_rank = 12;
-    opp_rank = 19;
+    local_rank = static_cast<u8>(matchmaking->GetPlayerRank(m_local_player_idx));
+    opp_rank = static_cast<u8>(matchmaking->GetPlayerRank(m_remote_player_idx));
   }
 
   // Add ranks
