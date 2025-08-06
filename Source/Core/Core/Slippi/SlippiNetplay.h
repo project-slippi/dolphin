@@ -81,12 +81,6 @@ enum SlippiRankVisibility
   Opponent
 };
 
-enum SlippiRankStatus
-{
-  Unreported,
-  Successful
-};
-
 class SlippiPlayerSelections
 {
 public:
@@ -94,7 +88,6 @@ public:
   u8 character_id{};
   u8 character_color{};
   u8 team_id{};
-  u8 rank{};
 
   bool is_character_selected = false;
 
@@ -110,7 +103,6 @@ public:
   void Merge(SlippiPlayerSelections& s)
   {
     this->rng_offset = s.rng_offset;
-    this->rank = s.rank;
 
     if (s.is_stage_selected)
     {
@@ -134,7 +126,6 @@ public:
     character_color = 0;
     is_character_selected = false;
     team_id = 0;
-    rank = 0;
 
     stage_id = 0;
     is_stage_selected = false;
