@@ -644,8 +644,12 @@ void SlippiMatchmaking::handleMatchmaking()
   // Disconnect and destroy enet client to mm server
   terminateMmConnection();
 
-  // Report to backend that we are attempting to connect to this match
-  slprs_exi_device_report_match_status(slprs_exi_device_ptr, match_id.c_str(), "connecting", true);
+  // If ranked, report to backend that we are attempting to connect to this match
+  if (match_id.find("mode.ranked") != std::string::npos)
+  {
+    slprs_exi_device_report_match_status(slprs_exi_device_ptr, match_id.c_str(), "connecting",
+                                         true);
+  }
 
   m_state = ProcessState::OPPONENT_CONNECTING;
   ERROR_LOG_FMT(SLIPPI_ONLINE, "[Matchmaking] Opponent found. is_decider: {}",
