@@ -192,8 +192,7 @@ private:
       {CMD_PREMADE_TEXT_LOAD, 0x2},
       {CMD_GET_RANK, 0x0},
       {CMD_FETCH_RANK, 0x0},
-      {CMD_GET_RANK_VISIBILITY, 0x0}
-  };
+      {CMD_GET_RANK_VISIBILITY, 0x0}};
 
   struct WriteMessage
   {
@@ -333,7 +332,6 @@ private:
 
   // Rank info variables
   bool is_rank_initialized = false;
-  int rank_matches_played = 0;
 
 protected:
   void TransferByte(u8& byte) override;

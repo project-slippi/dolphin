@@ -156,7 +156,8 @@ CEXISlippi::CEXISlippi(Core::System& system, const std::string current_file_name
   matchmaking = std::make_unique<SlippiMatchmaking>(slprs_exi_device_ptr, user.get());
   game_file_loader = std::make_unique<SlippiGameFileLoader>();
   g_replay_comm = std::make_unique<SlippiReplayComm>();
-  direct_codes = std::make_unique<SlippiDirectCodes>(slprs_exi_device_ptr, SlippiDirectCodes::DIRECT);
+  direct_codes =
+      std::make_unique<SlippiDirectCodes>(slprs_exi_device_ptr, SlippiDirectCodes::DIRECT);
   teams_codes = std::make_unique<SlippiDirectCodes>(slprs_exi_device_ptr, SlippiDirectCodes::TEAMS);
 
   // initialize the spectate server so we can connect without starting a game
@@ -295,7 +296,8 @@ CEXISlippi::~CEXISlippi()
   if (active_match_id.find("mode.ranked") != std::string::npos)
   {
     ERROR_LOG_FMT(SLIPPI_ONLINE, "Exit during in-progress ranked game: {}", active_match_id);
-    slprs_exi_device_report_match_status(slprs_exi_device_ptr, active_match_id.c_str(), "abandoned", false);
+    slprs_exi_device_report_match_status(slprs_exi_device_ptr, active_match_id.c_str(), "abandoned",
+                                         false);
   }
   handleConnectionCleanup();
 
@@ -1421,7 +1423,7 @@ bool CEXISlippi::shouldAdvanceOnlineFrame(s32 frame)
   // If the opponent is a bot running ahead to give us more inputs, we should
   // just keep going at our own pace rather than trying to catch up.
   if (opponentRunahead())
-     return false;
+    return false;
 
   // Logic below is used to test frame advance by forcing it more often
   // SConfig::GetInstance().m_EmulationSpeed = 0.5f;
@@ -2401,7 +2403,7 @@ void CEXISlippi::prepareOnlineMatchState()
     {
       alt_stage_mode = 0;
     }
-  
+
     // Group players into left/right side for team splash screen display
     for (int i = 0; i < 4; i++)
     {
@@ -2447,7 +2449,8 @@ void CEXISlippi::prepareOnlineMatchState()
   bool is_ranked = last_search.mode == SlippiMatchmaking::OnlinePlayMode::RANKED;
   if (is_ranked)
   {
-    // This has to be outside the player ready block because in game setup 2 the players are not ready at the start
+    // This has to be outside the player ready block because in game setup 2 the players are not
+    // ready at the start
     local_rank = static_cast<u8>(matchmaking->GetPlayerRank(m_local_player_idx));
     opp_rank = static_cast<u8>(matchmaking->GetPlayerRank(m_remote_player_idx));
   }
@@ -2814,6 +2817,7 @@ void CEXISlippi::handleLogInRequest()
 void CEXISlippi::handleLogOutRequest()
 {
   user->LogOut();
+  is_rank_initialized = false;
 }
 
 void CEXISlippi::prepareOnlineStatus()
@@ -2960,9 +2964,6 @@ void CEXISlippi::handleReportGame(const SlippiExiTypes::ReportGameQuery& query)
                                    color_id, starting_stocks, starting_percent);
 
     slprs_game_report_add_player_report(game_report, player_report);
-
-    // Increment total matches played this session, for checking match report on CSS
-    rank_matches_played++;
   }
 
   // If ranked mode and the game ended with a quit out, this is either a desync or an interrupted
@@ -3111,8 +3112,8 @@ void CEXISlippi::handleMatchStatusUpdate(const SlippiExiTypes::ReportMatchStatus
 
   auto status_string = statusMapRes->second;
 
-  INFO_LOG_FMT(SLIPPI_ONLINE, "Reporting match status update: {}, Status: {}", last_match_id.c_str(),
-           status_string.c_str());
+  INFO_LOG_FMT(SLIPPI_ONLINE, "Reporting match status update: {}, Status: {}",
+               last_match_id.c_str(), status_string.c_str());
 
   // Report asynchronously when called from the game
   slprs_exi_device_report_match_status(slprs_exi_device_ptr, last_match_id.c_str(),
@@ -3177,7 +3178,7 @@ void CEXISlippi::handleGetRank()
   m_read_queue.push_back(rank_visibility);
   m_read_queue.push_back(static_cast<u8>(rank_info.fetch_status));
 
-  //ERROR_LOG_FMT(SLIPPI_ONLINE, "Update count: {}", rank_info.rating_update_count);
+  // ERROR_LOG_FMT(SLIPPI_ONLINE, "Update count: {}", rank_info.rating_update_count);
 
   // Push rank data
   m_read_queue.push_back(static_cast<u8>(rank_info.rank));
@@ -3367,7 +3368,7 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
       break;
     case CMD_REPORT_MATCH_STATUS_UPDATE:
       handleMatchStatusUpdate(
-        SlippiExiTypes::Convert<SlippiExiTypes::ReportMatchStatusUpdateQuery>(&mem_ptr[buf_loc]));
+          SlippiExiTypes::Convert<SlippiExiTypes::ReportMatchStatusUpdateQuery>(&mem_ptr[buf_loc]));
       break;
     case CMD_GET_PLAYER_SETTINGS:
       handleGetPlayerSettings();
@@ -3452,13 +3453,13 @@ void CEXISlippi::ConfigureJukebox()
   }
 #endif
 
-  if (backend.find(BACKEND_NULLSOUND) != std::string::npos) {
+  if (backend.find(BACKEND_NULLSOUND) != std::string::npos)
+  {
     return;
   }
 
-  int dolphin_system_volume = Config::Get(Config::MAIN_AUDIO_MUTED) ?
-                                  0 :
-                                  Config::Get(Config::MAIN_AUDIO_VOLUME);
+  int dolphin_system_volume =
+      Config::Get(Config::MAIN_AUDIO_MUTED) ? 0 : Config::Get(Config::MAIN_AUDIO_VOLUME);
 
   int dolphin_music_volume = Config::Get(Config::SLIPPI_JUKEBOX_VOLUME);
 
