@@ -3396,7 +3396,7 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
     }
     case CMD_FETCH_RANK:
     {
-      slprs_fetch_rank_info(slprs_exi_device_ptr);
+      slprs_fetch_match_result(slprs_exi_device_ptr, recent_mm_result.id.c_str());
       break;
     }
     default:
