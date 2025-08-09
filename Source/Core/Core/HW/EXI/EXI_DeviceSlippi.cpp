@@ -2817,7 +2817,6 @@ void CEXISlippi::handleLogInRequest()
 void CEXISlippi::handleLogOutRequest()
 {
   user->LogOut();
-  is_rank_initialized = false;
 }
 
 void CEXISlippi::prepareOnlineStatus()
@@ -2835,13 +2834,6 @@ void CEXISlippi::prepareOnlineStatus()
     version::Semver200_version current_version(Common::GetSemVerStr());
 
     app_state = latest_version > current_version ? 2 : 1;
-
-    if (!is_rank_initialized)
-    {
-      is_rank_initialized = true;
-      // Cache user rank after logging in
-      slprs_fetch_rank_info(slprs_exi_device_ptr);
-    }
   }
 
   m_read_queue.push_back(app_state);

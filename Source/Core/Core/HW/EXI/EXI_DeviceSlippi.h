@@ -330,9 +330,6 @@ private:
   int fall_behind_counter = 0;
   int fall_far_behind_counter = 0;
 
-  // Rank info variables
-  bool is_rank_initialized = false;
-
 protected:
   void TransferByte(u8& byte) override;
 
