@@ -75,12 +75,6 @@ struct SlippiDesyncRecoveryResp
   SlippiSyncedGameState state;
 };
 
-enum SlippiRankVisibility
-{
-  Local,
-  Opponent
-};
-
 class SlippiPlayerSelections
 {
 public:

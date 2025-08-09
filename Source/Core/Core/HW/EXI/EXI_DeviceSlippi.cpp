@@ -2123,7 +2123,7 @@ void CEXISlippi::prepareOnlineMatchState()
   // in CSS p1 is always current player and p2 is opponent
   local_player_name = p1_ame = user_info.display_name;
   opp_name = p2_name = "Player 2";
-  local_rank = local_selections.rank;
+  local_rank = 8;
   opp_rank = 15;
 #endif
 
@@ -3161,10 +3161,9 @@ void CEXISlippi::handleGetRank()
   m_read_queue.clear();
 
   // Determine rank info visibility
-  bool local_rank_enabled = Config::Get(Config::SLIPPI_ENABLE_RANK_LOCAL);
-  bool opp_rank_enabled = Config::Get(Config::SLIPPI_ENABLE_RANK_OPP);
-  u8 rank_visibility = ((1 << SlippiRankVisibility::Local) * local_rank_enabled) |
-                       ((1 << SlippiRankVisibility::Opponent) * opp_rank_enabled);
+  u8 local_rank_enabled = static_cast<u8>(Config::Get(Config::SLIPPI_ENABLE_RANK_LOCAL));
+  u8 opp_rank_enabled = static_cast<u8>(Config::Get(Config::SLIPPI_ENABLE_RANK_OPP));
+  u8 rank_visibility = local_rank_enabled | (opp_rank_enabled << 1);
 
   // Push rank data header
   m_read_queue.push_back(rank_visibility);
