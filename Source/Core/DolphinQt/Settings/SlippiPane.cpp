@@ -313,16 +313,16 @@ void SlippiPane::ToggleJukebox(bool checked)
 {
   Config::SetBase(Config::SLIPPI_ENABLE_JUKEBOX, checked);
 
-//   if (Core::GetState(Core::System::GetInstance()) == Core::State::Running)
-//   {
-//     auto& system = Core::System::GetInstance();
-//     auto& exi_manager = system.GetExpansionInterface();
-//     ExpansionInterface::CEXISlippi* slippi_exi = static_cast<ExpansionInterface::CEXISlippi*>(
-//         exi_manager.GetDevice(ExpansionInterface::Slot::B));
+  if (Core::GetState(Core::System::GetInstance()) == Core::State::Running)
+  {
+    auto& system = Core::System::GetInstance();
+    auto& exi_manager = system.GetExpansionInterface();
+    ExpansionInterface::CEXISlippi* slippi_exi = static_cast<ExpansionInterface::CEXISlippi*>(
+        exi_manager.GetDevice(ExpansionInterface::Slot::B));
 
-//     if (slippi_exi != nullptr)
-//       slippi_exi->ConfigureJukebox();
-//   }
+    if (slippi_exi != nullptr)
+      slippi_exi->ConfigureJukebox();
+  }
 }
 
 void SlippiPane::ToggleLocalRankInfo(bool checked)
