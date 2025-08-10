@@ -701,7 +701,7 @@ SlippiMatchmaking::SlippiRank SlippiMatchmaking::GetPlayerRank(u8 port)
     return SlippiRank::Unranked;
   }
 
-  if (rating > 0.0f && rating <= 765.42f)
+  if (rating <= 765.42f)
   {
     return SlippiRank::Bronze1;
   }
