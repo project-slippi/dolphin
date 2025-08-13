@@ -279,8 +279,8 @@ bool ButtonCustom(const char* label, const ImVec2& size_arg,
   if (!ImGui::ItemAdd(bb, id))
     return false;
 
-  if (g.CurrentItemFlags & ImGuiItemFlags_ButtonRepeat)
-    flags |= ImGuiButtonFlags_Repeat;
+  //if (g.CurrentItemFlags & ImGuiItemFlags_ButtonRepeat)
+  //  flags |= ImGuiButtonFlags_Repeat;
   bool hovered, held;
   bool pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held, flags);
   if (pressed)
