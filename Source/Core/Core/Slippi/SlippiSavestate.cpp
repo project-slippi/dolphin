@@ -27,13 +27,6 @@ SlippiSavestate::SlippiSavestate()
     auto size = it->end_address - it->start_address;
     it->data = static_cast<u8*>(Common::AllocateAlignedMemory(size, 64));
   }
-
-  // u8 *ptr = nullptr;
-  // PointerWrap p(&ptr, PointerWrap::MODE_MEASURE);
-
-  // getDolphinState(p);
-  // const size_t buffer_size = reinterpret_cast<size_t>(ptr);
-  // dolphin_ss_backup.resize(buffer_size);
 }
 
 SlippiSavestate::~SlippiSavestate()
@@ -44,7 +37,7 @@ SlippiSavestate::~SlippiSavestate()
   }
 }
 
-bool cmpFn(SlippiSavestate::PreserveBlock pb1, SlippiSavestate::PreserveBlock pb2)
+static bool cmpFn(SlippiSavestate::PreserveBlock pb1, SlippiSavestate::PreserveBlock pb2)
 {
   return pb1.address < pb2.address;
 }
@@ -196,84 +189,43 @@ void SlippiSavestate::initBackupLocs()
   processed_locs.insert(processed_locs.end(), backup_locs.begin(), backup_locs.end());
 }
 
-void SlippiSavestate::getDolphinState(PointerWrap& p)
-{
-  // p.DoArray(Memory::m_pRAM, Memory::RAM_SIZE);
-  // p.DoMarker("Memory");
-  // VideoInterface::DoState(p);
-  // p.DoMarker("VideoInterface");
-  // SerialInterface::DoState(p);
-  // p.DoMarker("SerialInterface");
-  // ProcessorInterface::DoState(p);
-  // p.DoMarker("ProcessorInterface");
-  // DSP::DoState(p);
-  // p.DoMarker("DSP");
-  // DVDInterface::DoState(p);
-  // p.DoMarker("DVDInterface");
-  // GPFifo::DoState(p);
-  // p.DoMarker("GPFifo");
-  Core::System::GetInstance().GetExpansionInterface().DoState(p);
-  p.DoMarker("ExpansionInterface");
-  // AudioInterface::DoState(p);
-  // p.DoMarker("AudioInterface");
-}
-
 void SlippiSavestate::Capture()
 {
-  // First copy memory
+  // Copy memory into backup_loc data for each region we are backing up
   for (auto it = backup_locs.begin(); it != backup_locs.end(); ++it)
   {
     auto size = it->end_address - it->start_address;
     Core::System::GetInstance().GetMemory().CopyFromEmu(it->data, it->start_address, size);
   }
-
-  //// Second copy dolphin states
-  // u8 *ptr = &dolphin_ss_backup[0];
-  // PointerWrap p(&ptr, PointerWrap::MODE_WRITE);
-  // getDolphinState(p);
 }
 
-void SlippiSavestate::Load(std::vector<PreserveBlock> blocks)
+void SlippiSavestate::Load(std::vector<PreserveBlock> preserve_blocks)
 {
-  // static std::vector<PreserveBlock> interruptStuff = {
-  //    {0x804BF9D2, 4},
-  //    {0x804C3DE4, 20},
-  //    {0x804C4560, 44},
-  //    {0x804D7760, 36},
-  //};
-
-  // for (auto it = interruptStuff.begin(); it != interruptStuff.end(); ++it)
-  // {
-  //  blocks.push_back(*it);
-  // }
   auto& memory = Core::System::GetInstance().GetMemory();
 
-  // Back up
-  for (auto it = blocks.begin(); it != blocks.end(); ++it)
+  // Back up current memory of preserve blocks so we can bring them back after we
+  // load the full state
+  for (auto it = preserve_blocks.begin(); it != preserve_blocks.end(); ++it)
   {
+    // If we haven't initialized a vector to store data for this preservation block yet,
+    // do it now. This should only initialize if there's a new block definition being passed
     if (!preservation_map.count(*it))
     {
-      // TODO: Clear preservation map when game ends
       preservation_map[*it] = std::vector<u8>(it->length);
     }
 
     memory.CopyFromEmu(&preservation_map[*it][0], it->address, it->length);
   }
 
-  // Restore memory blocks
+  // Load savestate from the data that was captured
   for (auto it = backup_locs.begin(); it != backup_locs.end(); ++it)
   {
     auto size = it->end_address - it->start_address;
     memory.CopyToEmu(it->start_address, it->data, size);
   }
 
-  //// Restore audio
-  // u8 *ptr = &dolphin_ss_backup[0];
-  // PointerWrap p(&ptr, PointerWrap::MODE_READ);
-  // getDolphinState(p);
-
-  // Restore
-  for (auto it = blocks.begin(); it != blocks.end(); ++it)
+  // Restore the preserve blocks
+  for (auto it = preserve_blocks.begin(); it != preserve_blocks.end(); ++it)
   {
     memory.CopyToEmu(it->address, &preservation_map[*it][0], it->length);
   }
