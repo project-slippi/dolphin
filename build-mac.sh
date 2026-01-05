@@ -16,6 +16,7 @@ export LIBRARY_PATH=$LIBRARY_PATH:/usr/local/lib:/usr/lib/
 if [ "$1" == "playback" ]
 then
         echo "Using Playback build config"
+        CMAKE_FLAGS+=" -DSLIPPI_PLAYBACK=true"
 else
         echo "Using Netplay build config"
         CMAKE_FLAGS+=" -DSLIPPI_PLAYBACK=false"
