@@ -13,6 +13,7 @@
 #include "Common/Config/Config.h"
 #include "Core/Slippi/SlippiConfig.h"
 
+#include "Core/USBUtils.h"
 #include "DiscIO/Enums.h"
 
 // DSP Backend Types
@@ -89,6 +90,9 @@ extern const Info<bool> MAIN_ACCURATE_CPU_CACHE;
 extern const Info<bool> MAIN_DSP_HLE;
 extern const Info<int> MAIN_MAX_FALLBACK;
 extern const Info<int> MAIN_TIMING_VARIANCE;
+extern const Info<bool> MAIN_CORRECT_TIME_DRIFT;
+extern const Info<bool> MAIN_RUSH_FRAME_PRESENTATION;
+extern const Info<bool> MAIN_SMOOTH_EARLY_PRESENTATION;
 extern const Info<bool> MAIN_CPU_THREAD;
 extern const Info<bool> MAIN_SYNC_ON_SKIP_IDLE;
 extern const Info<std::string> MAIN_DEFAULT_ISO;
@@ -265,6 +269,7 @@ extern const Info<bool> MAIN_USE_HIGH_CONTRAST_TOOLTIPS;
 extern const Info<bool> MAIN_USE_PANIC_HANDLERS;
 extern const Info<bool> MAIN_ABORT_ON_PANIC_ALERT;
 extern const Info<bool> MAIN_OSD_MESSAGES;
+extern const Info<int> MAIN_OSD_FONT_SIZE;
 extern const Info<bool> MAIN_SKIP_NKIT_WARNING;
 extern const Info<bool> MAIN_CONFIRM_ON_STOP;
 
@@ -350,6 +355,7 @@ extern const Info<bool> MAIN_MOVIE_DUMP_FRAMES_SILENT;
 extern const Info<bool> MAIN_MOVIE_SHOW_INPUT_DISPLAY;
 extern const Info<bool> MAIN_MOVIE_SHOW_RTC;
 extern const Info<bool> MAIN_MOVIE_SHOW_RERECORD;
+extern const Info<bool> MAIN_MOVIE_SHOW_OSD;
 
 // Main.Input
 
@@ -383,8 +389,8 @@ extern const Info<std::string> MAIN_BLUETOOTH_PASSTHROUGH_LINK_KEYS;
 
 extern const Info<bool> MAIN_USB_PASSTHROUGH_DISGUISE_PLAYSTATION_AS_WII;
 extern const Info<std::string> MAIN_USB_PASSTHROUGH_DEVICES;
-std::set<std::pair<u16, u16>> GetUSBDeviceWhitelist();
-void SetUSBDeviceWhitelist(const std::set<std::pair<u16, u16>>& devices);
+std::set<USBUtils::DeviceInfo> GetUSBDeviceWhitelist();
+void SetUSBDeviceWhitelist(const std::set<USBUtils::DeviceInfo>& devices);
 
 // Main.EmulatedUSBDevices
 
@@ -394,6 +400,14 @@ extern const Info<bool> MAIN_EMULATE_WII_SPEAK;
 extern const Info<std::string> MAIN_WII_SPEAK_MICROPHONE;
 extern const Info<bool> MAIN_WII_SPEAK_MUTED;
 extern const Info<s16> MAIN_WII_SPEAK_VOLUME_MODIFIER;
+
+static constexpr std::size_t EMULATED_LOGITECH_MIC_COUNT = 4;
+
+extern const std::array<Info<bool>, EMULATED_LOGITECH_MIC_COUNT> MAIN_EMULATE_LOGITECH_MIC;
+extern const std::array<Info<std::string>, EMULATED_LOGITECH_MIC_COUNT>
+    MAIN_LOGITECH_MIC_MICROPHONE;
+extern const std::array<Info<bool>, EMULATED_LOGITECH_MIC_COUNT> MAIN_LOGITECH_MIC_MUTED;
+extern const std::array<Info<s16>, EMULATED_LOGITECH_MIC_COUNT> MAIN_LOGITECH_MIC_VOLUME_MODIFIER;
 
 // GameCube path utility functions
 

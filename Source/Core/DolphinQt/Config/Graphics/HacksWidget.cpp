@@ -15,27 +15,20 @@
 #include "DolphinQt/Config/ConfigControls/ConfigBool.h"
 #include "DolphinQt/Config/ConfigControls/ConfigSlider.h"
 #include "DolphinQt/Config/GameConfigWidget.h"
-#include "DolphinQt/Config/Graphics/GraphicsWindow.h"
+#include "DolphinQt/Config/Graphics/GraphicsPane.h"
 
 #include "VideoCommon/VideoConfig.h"
 
-HacksWidget::HacksWidget(GraphicsWindow* parent)
+HacksWidget::HacksWidget(GraphicsPane* gfx_pane) : m_game_layer{gfx_pane->GetConfigLayer()}
 {
   CreateWidgets();
   ConnectWidgets();
   AddDescriptions();
 
-  connect(parent, &GraphicsWindow::BackendChanged, this, &HacksWidget::OnBackendChanged);
+  connect(gfx_pane, &GraphicsPane::BackendChanged, this, &HacksWidget::OnBackendChanged);
   OnBackendChanged(QString::fromStdString(Config::Get(Config::MAIN_GFX_BACKEND)));
   connect(m_gpu_texture_decoding, &QCheckBox::toggled,
-          [parent] { emit parent->UseGPUTextureDecodingChanged(); });
-}
-
-HacksWidget::HacksWidget(GameConfigWidget* parent, Config::Layer* layer) : m_game_layer(layer)
-{
-  CreateWidgets();
-  ConnectWidgets();
-  AddDescriptions();
+          [gfx_pane] { emit gfx_pane->UseGPUTextureDecodingChanged(); });
 }
 
 void HacksWidget::CreateWidgets()
@@ -148,6 +141,16 @@ void HacksWidget::OnBackendChanged(const QString& backend_name)
 
 void HacksWidget::ConnectWidgets()
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+  connect(m_store_efb_copies, &QCheckBox::checkStateChanged,
+          [this](Qt::CheckState) { UpdateDeferEFBCopiesEnabled(); });
+  connect(m_store_xfb_copies, &QCheckBox::checkStateChanged,
+          [this](Qt::CheckState) { UpdateDeferEFBCopiesEnabled(); });
+  connect(m_immediate_xfb, &QCheckBox::checkStateChanged,
+          [this](Qt::CheckState) { UpdateSkipPresentingDuplicateFramesEnabled(); });
+  connect(m_vi_skip, &QCheckBox::checkStateChanged,
+          [this](Qt::CheckState) { UpdateSkipPresentingDuplicateFramesEnabled(); });
+#else
   connect(m_store_efb_copies, &QCheckBox::stateChanged,
           [this](int) { UpdateDeferEFBCopiesEnabled(); });
   connect(m_store_xfb_copies, &QCheckBox::stateChanged,
@@ -156,6 +159,7 @@ void HacksWidget::ConnectWidgets()
           [this](int) { UpdateSkipPresentingDuplicateFramesEnabled(); });
   connect(m_vi_skip, &QCheckBox::stateChanged,
           [this](int) { UpdateSkipPresentingDuplicateFramesEnabled(); });
+#endif
 }
 
 void HacksWidget::AddDescriptions()

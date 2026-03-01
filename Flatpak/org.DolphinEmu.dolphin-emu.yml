@@ -14,6 +14,7 @@ finish-args:
   # required for the emulated bluetooth adapter feature to work.
   - --allow=bluetooth
   - --filesystem=xdg-run/app/com.discordapp.Discord:create
+  - --filesystem=xdg-run/discord-ipc-0:create
   # required to disable the screensaver in various desktops
   - --talk-name=org.freedesktop.ScreenSaver
   - --talk-name=org.xfce.ScreenSaver
@@ -37,10 +38,6 @@ modules:
           project-id: 20540
           stable-only: true
           url-template: https://www.freedesktop.org/software/libevdev/libevdev-$version.tar.xz
-
-  # build the vendored SDL2 from Externals until the runtime gets 2.30.9
-  - SDL2/SDL2.json
-
   - name: dolphin-emu
     buildsystem: cmake-ninja
     builddir: true

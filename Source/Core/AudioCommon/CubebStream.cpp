@@ -10,7 +10,6 @@
 #include "Common/Event.h"
 #include "Common/Logging/Log.h"
 #include "Common/ScopeGuard.h"
-#include "Common/Thread.h"
 #include "Core/Config/MainSettings.h"
 
 #ifdef _WIN32
@@ -23,7 +22,7 @@ constexpr u32 BUFFER_SAMPLES = 480;
 long CubebStream::DataCallback(cubeb_stream* stream, void* user_data, const void* /*input_buffer*/,
                                void* output_buffer, long num_frames)
 {
-  auto* self = static_cast<CubebStream*>(user_data);
+  const auto* const self = static_cast<CubebStream*>(user_data);
 
   if (self->m_stereo)
     self->m_mixer->Mix(static_cast<short*>(output_buffer), num_frames);
@@ -41,14 +40,11 @@ CubebStream::CubebStream()
 #ifdef _WIN32
     : m_work_queue("Cubeb Worker")
 {
-  Common::Event sync_event;
-  m_work_queue.Push([this, &sync_event] {
-    Common::ScopeGuard sync_event_guard([&sync_event] { sync_event.Set(); });
-    auto result = ::CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
+  m_work_queue.PushBlocking([this] {
+    auto const result = CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
     m_coinit_success = result == S_OK;
     m_should_couninit = result == S_OK || result == S_FALSE;
   });
-  sync_event.Wait();
 }
 #else
     = default;
@@ -61,11 +57,8 @@ bool CubebStream::Init()
 #ifdef _WIN32
   if (!m_coinit_success)
     return false;
-  Common::Event sync_event;
-  m_work_queue.Push([this, &return_value, &sync_event] {
-    Common::ScopeGuard sync_event_guard([&sync_event] { sync_event.Set(); });
+  m_work_queue.PushBlocking([this, &return_value] {
 #endif
-
     m_ctx = CubebUtils::GetContext();
     if (m_ctx)
     {
@@ -99,7 +92,6 @@ bool CubebStream::Init()
 
 #ifdef _WIN32
   });
-  sync_event.Wait();
 #endif
 
   return return_value;
@@ -112,9 +104,7 @@ bool CubebStream::SetRunning(bool running)
 #ifdef _WIN32
   if (!m_coinit_success)
     return false;
-  Common::Event sync_event;
-  m_work_queue.Push([this, running, &return_value, &sync_event] {
-    Common::ScopeGuard sync_event_guard([&sync_event] { sync_event.Set(); });
+  m_work_queue.PushBlocking([this, running, &return_value] {
 #endif
     if (running)
       return_value = cubeb_stream_start(m_stream) == CUBEB_OK;
@@ -122,7 +112,6 @@ bool CubebStream::SetRunning(bool running)
       return_value = cubeb_stream_stop(m_stream) == CUBEB_OK;
 #ifdef _WIN32
   });
-  sync_event.Wait();
 #endif
 
   return return_value;
@@ -131,9 +120,7 @@ bool CubebStream::SetRunning(bool running)
 CubebStream::~CubebStream()
 {
 #ifdef _WIN32
-  Common::Event sync_event;
-  m_work_queue.Push([this, &sync_event] {
-    Common::ScopeGuard sync_event_guard([&sync_event] { sync_event.Set(); });
+  m_work_queue.PushBlocking([this] {
 #endif
     cubeb_stream_stop(m_stream);
     cubeb_stream_destroy(m_stream);
@@ -145,7 +132,6 @@ CubebStream::~CubebStream()
     }
     m_coinit_success = false;
   });
-  sync_event.Wait();
 #endif
   m_ctx.reset();
 }
@@ -155,13 +141,10 @@ void CubebStream::SetVolume(int volume)
 #ifdef _WIN32
   if (!m_coinit_success)
     return;
-  Common::Event sync_event;
-  m_work_queue.Push([this, volume, &sync_event] {
-    Common::ScopeGuard sync_event_guard([&sync_event] { sync_event.Set(); });
+  m_work_queue.PushBlocking([this, volume] {
 #endif
     cubeb_stream_set_volume(m_stream, volume / 100.0f);
 #ifdef _WIN32
   });
-  sync_event.Wait();
 #endif
 }

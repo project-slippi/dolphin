@@ -71,17 +71,17 @@ bool Load(Core::System& system)
   auto& ppc_symbol_db = power_pc.GetSymbolDB();
 
   // Load symbols for the IPL if they exist.
-  if (!ppc_symbol_db.IsEmpty())
-  {
-    ppc_symbol_db.Clear();
-    Host_PPCSymbolsChanged();
-  }
+  bool symbols_changed = ppc_symbol_db.Clear();
+
   if (ppc_symbol_db.LoadMap(guard, File::GetUserPath(D_MAPS_IDX) + "mios-ipl.map"))
   {
     ::HLE::Clear();
     ::HLE::PatchFunctions(system);
-    Host_PPCSymbolsChanged();
+    symbols_changed = true;
   }
+
+  if (symbols_changed)
+    Host_PPCSymbolsChanged();
 
   const PowerPC::CoreMode core_mode = power_pc.GetMode();
   power_pc.SetMode(PowerPC::CoreMode::Interpreter);
@@ -89,7 +89,7 @@ bool Load(Core::System& system)
   PowerPC::PowerPCState& ppc_state = power_pc.GetPPCState();
   ppc_state.msr.Hex = 0;
   ppc_state.pc = 0x3400;
-  PowerPC::MSRUpdated(ppc_state);
+  power_pc.MSRUpdated();
 
   NOTICE_LOG_FMT(IOS, "Loaded MIOS and bootstrapped PPC.");
 

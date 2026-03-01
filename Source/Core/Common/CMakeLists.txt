@@ -54,6 +54,8 @@ add_library(common
   Debug/Threads.h
   Debug/Watches.cpp
   Debug/Watches.h
+  DirectIOFile.cpp
+  DirectIOFile.h
   DynamicLibrary.cpp
   DynamicLibrary.h
   ENet.cpp
@@ -66,6 +68,8 @@ add_library(common
   FatFsUtil.h
   FileSearch.cpp
   FileSearch.h
+  FilesystemWatcher.cpp
+  FilesystemWatcher.h
   FileUtil.cpp
   FileUtil.h
   FixedSizeQueue.h
@@ -97,6 +101,7 @@ add_library(common
   JsonUtil.cpp
   Lazy.h
   LinearDiskCache.h
+  UnixUtil.h
   Logging/ConsoleListener.h
   Logging/Log.h
   Logging/LogManager.cpp
@@ -110,10 +115,12 @@ add_library(common
   MinizipUtil.h
   MsgHandler.cpp
   MsgHandler.h
+  Mutex.h
   NandPaths.cpp
   NandPaths.h
   Network.cpp
   Network.h
+  OneShotEvent.h
   PcapFile.cpp
   PcapFile.h
   Profiler.cpp
@@ -178,15 +185,15 @@ PUBLIC
   enet::enet
   fmt::fmt
   MbedTLS::mbedtls
-  minizip::minizip
+  minizip-ng::minizip-ng
   sfml-network
   slippi_rust_extensions
 
 PRIVATE
   CURL::libcurl
   FatFs
-  Iconv::Iconv
   spng::spng
+  watcher
   ${VTUNE_LIBRARIES}
 )
 
@@ -223,8 +230,6 @@ endif()
 
 if(ANDROID)
   target_sources(common PRIVATE
-    AndroidAnalytics.cpp
-    AndroidAnalytics.h
     Logging/ConsoleListenerDroid.cpp
     MemArenaAndroid.cpp
   )
@@ -309,6 +314,8 @@ if(WIN32)
     CompatPatches.cpp
     GL/GLInterface/WGL.cpp
     GL/GLInterface/WGL.h
+    WindowsDevice.cpp
+    WindowsDevice.h
     WindowsRegistry.cpp
   )
 elseif(APPLE)
@@ -340,14 +347,12 @@ endif()
 
 if(WIN32)
   target_sources(common PRIVATE HRWrap.h HRWrap.cpp)
+else()
+  target_link_libraries(common PRIVATE Iconv::Iconv)
 endif()
 
 if(USE_UPNP)
   target_link_libraries(common PRIVATE Miniupnpc::miniupnpc)
-endif()
-
-if(OPROFILE_FOUND)
-  target_link_libraries(common PRIVATE OProfile::OProfile)
 endif()
 
 if(ENABLE_LLVM)

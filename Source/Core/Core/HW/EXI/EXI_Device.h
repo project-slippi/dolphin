@@ -41,6 +41,7 @@ enum class EXIDeviceType : int
   EthernetBuiltIn,
   Slippi,
   ModemTapServer,
+  EthernetIPC,
   None = 0xFF
 };
 
@@ -88,7 +89,7 @@ std::unique_ptr<IEXIDevice> EXIDevice_Create(Core::System& system, EXIDeviceType
 
 template <>
 struct fmt::formatter<ExpansionInterface::EXIDeviceType>
-    : EnumFormatter<ExpansionInterface::EXIDeviceType::ModemTapServer>
+    : EnumFormatter<ExpansionInterface::EXIDeviceType::EthernetIPC>
 {
   static constexpr array_type names = {
       _trans("Dummy"), _trans("Memory Card"), _trans("Mask ROM"),
@@ -105,6 +106,7 @@ struct fmt::formatter<ExpansionInterface::EXIDeviceType>
       _trans("Broadband Adapter (HLE)"),
       _trans("Slippi"),
       _trans("Modem Adapter (tapserver)"),
+      _trans("Broadband Adapter (IPC)"),
   };
 
   constexpr formatter() : EnumFormatter(names) {}

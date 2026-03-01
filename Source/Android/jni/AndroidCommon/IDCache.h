@@ -19,7 +19,6 @@ jmethodID GetOnTitleChanged();
 jmethodID GetFinishEmulationActivity();
 
 jclass GetAnalyticsClass();
-jmethodID GetSendAnalyticsReport();
 jmethodID GetAnalyticsValue();
 
 jclass GetGameFileClass();
@@ -120,5 +119,9 @@ jmethodID GetPermissionHandlerHasRecordAudioPermission();
 jmethodID GetPermissionHandlerRequestRecordAudioPermission();
 
 jmethodID GetRunnableRun();
+
+jclass GetAudioUtilsClass();
+jmethodID GetAudioUtilsGetSampleRate();
+jmethodID GetAudioUtilsGetFramesPerBuffer();
 
 }  // namespace IDCache

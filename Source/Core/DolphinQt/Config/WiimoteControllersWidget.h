@@ -8,12 +8,14 @@
 #include <QWidget>
 
 #include "Common/WorkQueueThread.h"
-#include "Core/IOS/USB/Bluetooth/BTReal.h"
+#include "Core/USBUtils.h"
 
+class QAction;
 class QCheckBox;
 class QComboBox;
 class QHBoxLayout;
 class QGridLayout;
+class QToolButton;
 class QGroupBox;
 class QLabel;
 class QPushButton;
@@ -38,8 +40,7 @@ private:
   void OnBluetoothPassthroughDeviceChanged(int index);
   void OnBluetoothPassthroughSyncPressed();
   void OnBluetoothPassthroughResetPressed();
-  void OnBluetoothAdapterRefreshComplete(
-      const std::vector<IOS::HLE::BluetoothRealDevice::BluetoothDeviceInfo>& devices);
+  void OnBluetoothAdapterRefreshComplete(const std::vector<USBUtils::DeviceInfo>& devices);
   void OnWiimoteRefreshPressed();
   void OnWiimoteConfigure(size_t index);
   void StartBluetoothAdapterRefresh();
@@ -48,6 +49,12 @@ private:
   void CreateLayout();
   void ConnectWidgets();
   void LoadSettings(Core::State state);
+
+#if defined(_WIN32)
+  void AsyncRefreshActionHelper(std::invocable<> auto);
+  void TriggerHostWiimoteSync();
+  void TriggerHostWiimoteReset();
+#endif
 
   QGroupBox* m_wiimote_box;
   QGridLayout* m_wiimote_layout;
@@ -71,6 +78,7 @@ private:
   QCheckBox* m_wiimote_real_balance_board;
   QCheckBox* m_wiimote_speaker_data;
   QCheckBox* m_wiimote_ciface;
-  QPushButton* m_wiimote_refresh;
+  QToolButton* m_wiimote_refresh;
+  QLabel* m_wiimote_refresh_indicator;
   QLabel* m_bluetooth_unavailable;
 };

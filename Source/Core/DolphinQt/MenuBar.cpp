@@ -14,7 +14,6 @@
 #include <QFontDialog>
 #include <QInputDialog>
 #include <QMap>
-#include <QSignalBlocker>
 #include <QUrl>
 
 #include <fmt/format.h>
@@ -26,7 +25,6 @@
 #include "Common/StringUtil.h"
 
 #include "Core/AchievementManager.h"
-#include "Core/Boot/Boot.h"
 #include "Core/CommonTitles.h"
 #include "Core/Config/AchievementSettings.h"
 #include "Core/Config/MainSettings.h"
@@ -67,7 +65,7 @@
 #include "DolphinQt/QtUtils/NonAutodismissibleMenu.h"
 #include "DolphinQt/QtUtils/ParallelProgressDialog.h"
 #include "DolphinQt/QtUtils/QueueOnObject.h"
-#include "DolphinQt/QtUtils/SetWindowDecorations.h"
+#include "DolphinQt/QtUtils/SignalBlocking.h"
 #include "DolphinQt/Settings.h"
 #include "DolphinQt/Updater.h"
 
@@ -178,8 +176,9 @@ void MenuBar::OnEmulationStateChanged(Core::State state)
 
 void MenuBar::OnConfigChanged()
 {
-  const QSignalBlocker blocker(m_jit_profile_blocks);
-  m_jit_profile_blocks->setChecked(Config::Get(Config::MAIN_DEBUG_JIT_ENABLE_PROFILING));
+  SignalBlocking(m_jit_profile_blocks)
+      ->setChecked(Config::Get(Config::MAIN_DEBUG_JIT_ENABLE_PROFILING));
+  SignalBlocking(m_movie_window)->setChecked(Config::Get(Config::MAIN_MOVIE_SHOW_OSD));
 }
 
 void MenuBar::OnDebugModeToggled(bool enabled)
@@ -282,6 +281,7 @@ void MenuBar::AddToolsMenu()
   usb_device_menu->addAction(tr("&Skylanders Portal"), this, &MenuBar::ShowSkylanderPortal);
   usb_device_menu->addAction(tr("&Infinity Base"), this, &MenuBar::ShowInfinityBase);
   usb_device_menu->addAction(tr("&Wii Speak"), this, &MenuBar::ShowWiiSpeakWindow);
+  usb_device_menu->addAction(tr("&Logitech USB Microphone"), this, &MenuBar::ShowLogitechMicWindow);
   tools_menu->addMenu(usb_device_menu);
 
   tools_menu->addSeparator();
@@ -296,8 +296,8 @@ void MenuBar::AddToolsMenu()
       tools_menu->addAction(tr("Achievements"), this, [this] { emit ShowAchievementsWindow(); });
 #ifdef RC_CLIENT_SUPPORTS_RAINTEGRATION
   m_achievements_dev_menu = tools_menu->addMenu(tr("RetroAchievements Development"));
-  AchievementManager::GetInstance().SetDevMenuUpdateCallback(
-      [this]() { QueueOnObject(this, [this] { this->UpdateAchievementDevelopmentMenu(); }); });
+  m_raintegration_event_hook = AchievementManager::GetInstance().dev_menu_update_event.Register(
+      [this] { QueueOnObject(this, [this] { UpdateAchievementDevelopmentMenu(); }); });
   m_achievements_dev_menu->menuAction()->setVisible(false);
 #endif  // RC_CLIENT_SUPPORTS_RAINTEGRATION
   tools_menu->addSeparator();
@@ -353,22 +353,23 @@ void MenuBar::AddToolsMenu()
   m_export_wii_saves =
       tools_menu->addAction(tr("Export All Wii Saves"), this, &MenuBar::ExportWiiSaves);
 
-  QMenu* menu = new QMenu(tr("Connect Wii Remotes"), tools_menu);
+  auto* const connect_wii_remotes_menu{
+      new QtUtils::NonAutodismissibleMenu(tr("Connect Wii Remotes"), tools_menu)};
 
   tools_menu->addSeparator();
-  tools_menu->addMenu(menu);
+  tools_menu->addMenu(connect_wii_remotes_menu);
 
   for (int i = 0; i < 4; i++)
   {
-    m_wii_remotes[i] = menu->addAction(tr("Connect Wii Remote %1").arg(i + 1), this,
-                                       [this, i] { emit ConnectWiiRemote(i); });
+    m_wii_remotes[i] = connect_wii_remotes_menu->addAction(
+        tr("Connect Wii Remote %1").arg(i + 1), this, [this, i] { emit ConnectWiiRemote(i); });
     m_wii_remotes[i]->setCheckable(true);
   }
 
-  menu->addSeparator();
+  connect_wii_remotes_menu->addSeparator();
 
-  m_wii_remotes[4] =
-      menu->addAction(tr("Connect Balance Board"), this, [this] { emit ConnectWiiRemote(4); });
+  m_wii_remotes[4] = connect_wii_remotes_menu->addAction(tr("Connect Balance Board"), this,
+                                                         [this] { emit ConnectWiiRemote(4); });
   m_wii_remotes[4]->setCheckable(true);
 }
 
@@ -407,7 +408,7 @@ void MenuBar::AddStateLoadMenu(QMenu* emu_menu)
   {
     QAction* action = m_state_load_slots_menu->addAction(QString{});
 
-    connect(action, &QAction::triggered, this, [=, this]() { emit StateLoadSlotAt(i); });
+    connect(action, &QAction::triggered, this, [=, this] { emit StateLoadSlotAt(i); });
   }
 }
 
@@ -424,7 +425,7 @@ void MenuBar::AddStateSaveMenu(QMenu* emu_menu)
   {
     QAction* action = m_state_save_slots_menu->addAction(QString{});
 
-    connect(action, &QAction::triggered, this, [=, this]() { emit StateSaveSlotAt(i); });
+    connect(action, &QAction::triggered, this, [=, this] { emit StateSaveSlotAt(i); });
   }
 }
 
@@ -441,7 +442,7 @@ void MenuBar::AddStateSlotMenu(QMenu* emu_menu)
     if (Settings::Instance().GetStateSlot() == i)
       action->setChecked(true);
 
-    connect(action, &QAction::triggered, this, [=, this]() { emit SetStateSlot(i); });
+    connect(action, &QAction::triggered, this, [=, this] { emit SetStateSlot(i); });
     connect(this, &MenuBar::SetStateSlot, [action, i](const int slot) {
       if (slot == i)
         action->setChecked(true);
@@ -602,7 +603,8 @@ void MenuBar::AddViewMenu()
 
 void MenuBar::AddOptionsMenu()
 {
-  QMenu* options_menu = addMenu(tr("&Options"));
+  auto* const options_menu{new QtUtils::NonAutodismissibleMenu(tr("&Options"), this)};
+  addMenu(options_menu);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 4, 0)
   options_menu->addAction(tr("Co&nfiguration"), QKeySequence::Preferences, this,
                           &MenuBar::Configure);
@@ -630,7 +632,7 @@ void MenuBar::AddOptionsMenu()
 
   m_reset_ignore_panic_handler = options_menu->addAction(tr("Reset Ignore Panic Handler"));
 
-  connect(m_reset_ignore_panic_handler, &QAction::triggered, this, []() {
+  connect(m_reset_ignore_panic_handler, &QAction::triggered, this, [] {
     Config::DeleteKey(Config::LayerType::CurrentRun, Config::MAIN_USE_PANIC_HANDLERS);
   });
 
@@ -653,17 +655,17 @@ void MenuBar::AddHelpMenu()
 
   QAction* website = help_menu->addAction(tr("&Website"));
   connect(website, &QAction::triggered, this,
-          []() { QDesktopServices::openUrl(QUrl(QStringLiteral("https://dolphin-emu.org/"))); });
+          [] { QDesktopServices::openUrl(QUrl(QStringLiteral("https://dolphin-emu.org/"))); });
   QAction* documentation = help_menu->addAction(tr("Online &Documentation"));
-  connect(documentation, &QAction::triggered, this, []() {
+  connect(documentation, &QAction::triggered, this, [] {
     QDesktopServices::openUrl(QUrl(QStringLiteral("https://dolphin-emu.org/docs/guides")));
   });
   QAction* github = help_menu->addAction(tr("&GitHub Repository"));
-  connect(github, &QAction::triggered, this, []() {
+  connect(github, &QAction::triggered, this, [] {
     QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/dolphin-emu/dolphin")));
   });
   QAction* bugtracker = help_menu->addAction(tr("&Bug Tracker"));
-  connect(bugtracker, &QAction::triggered, this, []() {
+  connect(bugtracker, &QAction::triggered, this, [] {
     QDesktopServices::openUrl(
         QUrl(QStringLiteral("https://bugs.dolphin-emu.org/projects/emulator")));
   });
@@ -845,36 +847,13 @@ void MenuBar::AddMovieMenu()
   connect(pause_at_end, &QAction::toggled,
           [](bool value) { Config::SetBaseOrCurrent(Config::MAIN_MOVIE_PAUSE_MOVIE, value); });
 
-  auto* rerecord_counter = movie_menu->addAction(tr("Show Rerecord Counter"));
-  rerecord_counter->setCheckable(true);
-  rerecord_counter->setChecked(Config::Get(Config::MAIN_MOVIE_SHOW_RERECORD));
-  connect(rerecord_counter, &QAction::toggled,
-          [](bool value) { Config::SetBaseOrCurrent(Config::MAIN_MOVIE_SHOW_RERECORD, value); });
+  m_movie_window = movie_menu->addAction(tr("Enable Movie Window"));
+  m_movie_window->setCheckable(true);
+  m_movie_window->setChecked(Config::Get(Config::MAIN_MOVIE_SHOW_OSD));
+  connect(m_movie_window, &QAction::toggled,
+          [](bool value) { Config::SetBaseOrCurrent(Config::MAIN_MOVIE_SHOW_OSD, value); });
 
-  auto* lag_counter = movie_menu->addAction(tr("Show Lag Counter"));
-  lag_counter->setCheckable(true);
-  lag_counter->setChecked(Config::Get(Config::MAIN_SHOW_LAG));
-  connect(lag_counter, &QAction::toggled,
-          [](bool value) { Config::SetBaseOrCurrent(Config::MAIN_SHOW_LAG, value); });
-
-  auto* frame_counter = movie_menu->addAction(tr("Show Frame Counter"));
-  frame_counter->setCheckable(true);
-  frame_counter->setChecked(Config::Get(Config::MAIN_SHOW_FRAME_COUNT));
-  connect(frame_counter, &QAction::toggled,
-          [](bool value) { Config::SetBaseOrCurrent(Config::MAIN_SHOW_FRAME_COUNT, value); });
-
-  auto* input_display = movie_menu->addAction(tr("Show Input Display"));
-  input_display->setCheckable(true);
-  input_display->setChecked(Config::Get(Config::MAIN_MOVIE_SHOW_INPUT_DISPLAY));
-  connect(input_display, &QAction::toggled, [](bool value) {
-    Config::SetBaseOrCurrent(Config::MAIN_MOVIE_SHOW_INPUT_DISPLAY, value);
-  });
-
-  auto* system_clock = movie_menu->addAction(tr("Show System Clock"));
-  system_clock->setCheckable(true);
-  system_clock->setChecked(Config::Get(Config::MAIN_MOVIE_SHOW_RTC));
-  connect(system_clock, &QAction::toggled,
-          [](bool value) { Config::SetBaseOrCurrent(Config::MAIN_MOVIE_SHOW_RTC, value); });
+  movie_menu->addAction(tr("Customize Movie Window"), this, &MenuBar::ConfigureOSD);
 
   movie_menu->addSeparator();
 
@@ -893,7 +872,8 @@ void MenuBar::AddMovieMenu()
 
 void MenuBar::AddJITMenu()
 {
-  m_jit = addMenu(tr("JIT"));
+  m_jit = new QtUtils::NonAutodismissibleMenu(tr("JIT"), this);
+  addMenu(m_jit);
 
   m_jit_interpreter_core = m_jit->addAction(tr("Interpreter Core"));
   m_jit_interpreter_core->setCheckable(true);
@@ -1164,7 +1144,7 @@ void MenuBar::UpdateAchievementDevelopmentMenu()
       }
       auto* ra_dev_menu_item = m_achievements_dev_menu->addAction(
           QString::fromStdString(menu_item.label), this,
-          [menu_item]() { AchievementManager::GetInstance().ActivateDevMenuItem(menu_item.id); });
+          [menu_item] { AchievementManager::GetInstance().ActivateDevMenuItem(menu_item.id); });
       ra_dev_menu_item->setEnabled(menu_item.enabled);
       // Recommended hardcode by RAIntegration.dll developer Jamiras
       ra_dev_menu_item->setCheckable(i < 2);
@@ -1393,7 +1373,6 @@ void MenuBar::CheckNAND()
 
   {
     NANDRepairDialog dialog(result, this);
-    SetQWidgetWindowDecorations(&dialog);
     if (dialog.exec() != QDialog::Accepted)
       return;
   }
@@ -1564,7 +1543,6 @@ void MenuBar::GenerateSymbolsFromRSOAuto()
 
     return matches;
   });
-  SetQWidgetWindowDecorations(progress.GetRaw());
   progress.GetRaw()->exec();
 
   const auto matches = future.get();
@@ -1645,7 +1623,7 @@ RSOVector MenuBar::DetectRSOModules(ParallelProgressDialog& progress)
 
         for (; len < MODULE_NAME_MAX_LENGTH; ++len)
         {
-          const auto res = PowerPC::MMU::HostRead_U8(guard, *found_addr - (len + 1));
+          const auto res = PowerPC::MMU::HostRead<u8>(guard, *found_addr - (len + 1));
           if (!std::isprint(res))
           {
             break;
@@ -1717,7 +1695,7 @@ void MenuBar::LoadSymbolMap()
   auto& ppc_symbol_db = system.GetPPCSymbolDB();
 
   std::string existing_map_file, writable_map_file;
-  bool map_exists = CBoot::FindMapFile(&existing_map_file, &writable_map_file);
+  bool map_exists = PPCSymbolDB::FindMapFile(&existing_map_file, &writable_map_file);
 
   if (!map_exists)
   {
@@ -1755,7 +1733,7 @@ void MenuBar::LoadSymbolMap()
 void MenuBar::SaveSymbolMap()
 {
   std::string existing_map_file, writable_map_file;
-  CBoot::FindMapFile(&existing_map_file, &writable_map_file);
+  PPCSymbolDB::FindMapFile(&existing_map_file, &writable_map_file);
 
   TrySaveSymbolMap(QString::fromStdString(writable_map_file));
 }
@@ -1811,7 +1789,7 @@ void MenuBar::SaveSymbolMapAs()
 void MenuBar::SaveCode()
 {
   std::string existing_map_file, writable_map_file;
-  CBoot::FindMapFile(&existing_map_file, &writable_map_file);
+  PPCSymbolDB::FindMapFile(&existing_map_file, &writable_map_file);
 
   const std::string path =
       writable_map_file.substr(0, writable_map_file.find_last_of('.')) + "_code.map";
@@ -1989,7 +1967,7 @@ void MenuBar::SearchInstruction()
   for (u32 addr = Memory::MEM1_BASE_ADDR; addr < Memory::MEM1_BASE_ADDR + memory.GetRamSizeReal();
        addr += 4)
   {
-    if (op_std == PPCTables::GetInstructionName(PowerPC::MMU::HostRead_U32(guard, addr), addr))
+    if (op_std == PPCTables::GetInstructionName(PowerPC::MMU::HostRead<u32>(guard, addr), addr))
     {
       NOTICE_LOG_FMT(POWERPC, "Found {} at {:08x}", op_std, addr);
       found = true;

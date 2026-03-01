@@ -53,6 +53,15 @@ static std::vector<GeckoCode> s_active_codes;
 static std::vector<GeckoCode> s_synced_codes;
 static std::mutex s_active_codes_lock;
 
+size_t CountEnabledCodes()
+{
+  if (!Config::AreCheatsEnabled())
+    return 0;
+
+  std::lock_guard guard(s_active_codes_lock);
+  return s_active_codes.size();
+}
+
 void SetActiveCodes(std::span<const GeckoCode> gcodes, const std::string& game_id, u16 revision)
 {
   std::lock_guard lk(s_active_codes_lock);
@@ -64,11 +73,11 @@ void SetActiveCodes(std::span<const GeckoCode> gcodes, const std::string& game_i
   {
     s_active_codes.reserve(gcodes.size());
 
+    const auto should_be_activated = [&game_id, &revision](const GeckoCode& code) {
+      return AchievementManager::GetInstance().ShouldGeckoCodeBeActivated(code, game_id, revision);
+    };
     std::copy_if(gcodes.begin(), gcodes.end(), std::back_inserter(s_active_codes),
-                 [&game_id, &revision](const GeckoCode& code) {
-                   return code.enabled && AchievementManager::GetInstance().CheckApprovedGeckoCode(
-                                              code, game_id, revision);
-                 });
+                 should_be_activated);
   }
   s_active_codes.shrink_to_fit();
 
@@ -135,17 +144,17 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
 
   // Install code handler
   for (u32 i = 0; i < data.size(); ++i)
-    PowerPC::MMU::HostWrite_U8(guard, data[i], INSTALLER_BASE_ADDRESS + i);
+    PowerPC::MMU::HostWrite<u8>(guard, data[i], INSTALLER_BASE_ADDRESS + i);
 
   // Patch the code handler to the current system type (Gamecube/Wii)
   for (u32 h = 0; h < data.length(); h += 4)
   {
     // Patch MMIO address
-    if (PowerPC::MMU::HostRead_U32(guard, INSTALLER_BASE_ADDRESS + h) ==
+    if (PowerPC::MMU::HostRead<u32>(guard, INSTALLER_BASE_ADDRESS + h) ==
         (0x3f000000u | ((mmio_addr ^ 1) << 8)))
     {
       NOTICE_LOG_FMT(ACTIONREPLAY, "Patching MMIO access at {:08x}", INSTALLER_BASE_ADDRESS + h);
-      PowerPC::MMU::HostWrite_U32(guard, 0x3f000000u | mmio_addr << 8, INSTALLER_BASE_ADDRESS + h);
+      PowerPC::MMU::HostWrite<u32>(guard, 0x3f000000u | mmio_addr << 8, INSTALLER_BASE_ADDRESS + h);
     }
   }
 
@@ -153,7 +162,7 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
   u32 codelist_end_address = INSTALLER_END_ADDRESS;
 
   // Write a magic value to 'gameid' (codehandleronly does not actually read this).
-  PowerPC::MMU::HostWrite_U32(guard, MAGIC_GAMEID, INSTALLER_BASE_ADDRESS);
+  PowerPC::MMU::HostWrite<u32>(guard, MAGIC_GAMEID, INSTALLER_BASE_ADDRESS);
 
   // Install the custom bootloader to write gecko codes to the heap
   if (SConfig::GetSlippiConfig().melee_version == Melee::Version::NTSC ||
@@ -164,7 +173,7 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
     // that attempts to read/write commands for the USB Gecko. These calls
     // were sometimes interfering with the Slippi EXI calls and causing
     // the game to loop infinitely in EXISync.
-    PowerPC::MMU::HostWrite_U32(guard, 0x4E800020, 0x80001D6C);
+    PowerPC::MMU::HostWrite<u32>(guard, 0x4E800020, 0x80001D6C);
 
     // Write GCT loader into memory which will eventually load the real GCT into the heap
     std::string bootloaderData;
@@ -185,16 +194,16 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
 
     // Install bootloader gct
     for (size_t i = 0; i < bootloaderData.length(); ++i)
-      PowerPC::MMU::HostWrite_U8(guard, bootloaderData[i],
+      PowerPC::MMU::HostWrite<u8>(guard, bootloaderData[i],
                                  static_cast<u32>(codelist_base_address + i));
                             
-    PowerPC::MMU::HostWrite_U32(guard, 0, HLE_TRAMPOLINE_ADDRESS);
+      PowerPC::MMU::HostWrite<u32>(guard, 0, HLE_TRAMPOLINE_ADDRESS);
   }
   else
   {
     // Create GCT in memory
-    PowerPC::MMU::HostWrite_U32(guard, 0x00d0c0de, codelist_base_address);
-    PowerPC::MMU::HostWrite_U32(guard, 0x00d0c0de, codelist_base_address + 4);
+    PowerPC::MMU::HostWrite<u32>(guard, 0x00d0c0de, codelist_base_address);
+    PowerPC::MMU::HostWrite<u32>(guard, 0x00d0c0de, codelist_base_address + 4);
 
     // Each code is 8 bytes (2 words) wide. There is a starter code and an end code.
     const u32 start_address = codelist_base_address + CODE_SIZE;
@@ -222,8 +231,8 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
 
       for (const GeckoCode::Code& code : active_code.codes)
       {
-        PowerPC::MMU::HostWrite_U32(guard, code.address, next_address);
-        PowerPC::MMU::HostWrite_U32(guard, code.data, next_address + 4);
+        PowerPC::MMU::HostWrite<u32>(guard, code.address, next_address);
+        PowerPC::MMU::HostWrite<u32>(guard, code.data, next_address + 4);
         next_address += CODE_SIZE;
       }
     }
@@ -232,13 +241,13 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
                  end_address - start_address);
 
     // Stop code. Tells the handler that this is the end of the list.
-    PowerPC::MMU::HostWrite_U32(guard, 0xF0000000, next_address);
-    PowerPC::MMU::HostWrite_U32(guard, 0x00000000, next_address + 4);
-    PowerPC::MMU::HostWrite_U32(guard, 0, HLE_TRAMPOLINE_ADDRESS);
+    PowerPC::MMU::HostWrite<u32>(guard, 0xF0000000, next_address);
+    PowerPC::MMU::HostWrite<u32>(guard, 0x00000000, next_address + 4);
+    PowerPC::MMU::HostWrite<u32>(guard, 0, HLE_TRAMPOLINE_ADDRESS);
   }
 
   // Turn on codes
-  PowerPC::MMU::HostWrite_U8(guard, 1, INSTALLER_BASE_ADDRESS + 7);
+  PowerPC::MMU::HostWrite<u8>(guard, 1, INSTALLER_BASE_ADDRESS + 7);
 
   // Invalidate the icache and any asm codes
   auto& ppc_state = guard.GetSystem().GetPPCState();
@@ -308,18 +317,18 @@ void RunCodeHandler(const Core::CPUThreadGuard& guard)
   ppc_state.gpr[1] -= 8;                          // Fake stack frame for codehandler
   ppc_state.gpr[1] &= 0xFFFFFFF0;                 // Align stack to 16bytes
   u32 SP = ppc_state.gpr[1];                      // Stack Pointer
-  PowerPC::MMU::HostWrite_U32(guard, SP + 8, SP);
+  PowerPC::MMU::HostWrite<u32>(guard, SP + 8, SP);
   // SP + 4 is reserved for the codehandler to save LR to the stack.
-  PowerPC::MMU::HostWrite_U32(guard, SFP, SP + 8);  // Real stack frame
-  PowerPC::MMU::HostWrite_U32(guard, ppc_state.pc, SP + 12);
-  PowerPC::MMU::HostWrite_U32(guard, LR(ppc_state), SP + 16);
-  PowerPC::MMU::HostWrite_U32(guard, ppc_state.cr.Get(), SP + 20);
+  PowerPC::MMU::HostWrite<u32>(guard, SFP, SP + 8);  // Real stack frame
+  PowerPC::MMU::HostWrite<u32>(guard, ppc_state.pc, SP + 12);
+  PowerPC::MMU::HostWrite<u32>(guard, LR(ppc_state), SP + 16);
+  PowerPC::MMU::HostWrite<u32>(guard, ppc_state.cr.Get(), SP + 20);
   // Registers FPR0->13 are volatile
   for (u32 i = 0; i < 14; ++i)
   {
-    PowerPC::MMU::HostWrite_U64(guard, ppc_state.ps[i].PS0AsU64(), SP + 24 + 2 * i * sizeof(u64));
-    PowerPC::MMU::HostWrite_U64(guard, ppc_state.ps[i].PS1AsU64(),
-                                SP + 24 + (2 * i + 1) * sizeof(u64));
+    PowerPC::MMU::HostWrite<u64>(guard, ppc_state.ps[i].PS0AsU64(), SP + 24 + 2 * i * sizeof(u64));
+    PowerPC::MMU::HostWrite<u64>(guard, ppc_state.ps[i].PS1AsU64(),
+                                 SP + 24 + (2 * i + 1) * sizeof(u64));
   }
   DEBUG_LOG_FMT(ACTIONREPLAY,
                 "GeckoCodes: Initiating phantom branch-and-link. "

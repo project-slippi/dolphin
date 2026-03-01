@@ -6,10 +6,10 @@ include(CheckIncludeFile)
 add_library(minizip STATIC
   minizip-ng/mz.h
   # minizip-ng/compat/crypt.h
-  minizip-ng/compat/ioapi.c
-  minizip-ng/compat/ioapi.h
-  minizip-ng/compat/unzip.c
-  minizip-ng/compat/unzip.h
+  # minizip-ng/compat/ioapi.c
+  # minizip-ng/compat/ioapi.h
+  # minizip-ng/compat/unzip.c
+  # minizip-ng/compat/unzip.h
   # minizip-ng/compat/zip.c
   # minizip-ng/compat/zip.h
   minizip-ng/mz_crypt.c
@@ -72,7 +72,7 @@ target_include_directories(minizip PUBLIC minizip-ng minizip-ng/compat)
 
 target_compile_definitions(minizip PRIVATE HAVE_ZLIB ZLIB_COMPAT MZ_ZIP_NO_CRYPTO MZ_ZIP_NO_ENCRYPTION)
 if (UNIX)
-  target_compile_definitions(minizip PRIVATE _POSIX_C_SOURCE=200112L)
+  target_compile_definitions(minizip PRIVATE _POSIX_C_SOURCE=200809L)
   target_compile_definitions(minizip PRIVATE __USE_LARGEFILE64 _LARGEFILE64_SOURCE)
 endif()
 
@@ -93,4 +93,4 @@ endif()
 
 target_link_libraries(minizip PUBLIC ZLIB::ZLIB)
 
-add_library(minizip::minizip ALIAS minizip)
+add_library(minizip-ng::minizip-ng ALIAS minizip)

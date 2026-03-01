@@ -355,39 +355,6 @@ bool CBoot::DVDReadDiscID(Core::System& system, const DiscIO::VolumeDisc& disc, 
   return true;
 }
 
-// Get map file paths for the active title.
-bool CBoot::FindMapFile(std::string* existing_map_file, std::string* writable_map_file)
-{
-  const std::string& game_id = SConfig::GetInstance().m_debugger_game_id;
-  std::string path = File::GetUserPath(D_MAPS_IDX) + game_id + ".map";
-
-  if (writable_map_file)
-    *writable_map_file = path;
-
-  if (File::Exists(path))
-  {
-    if (existing_map_file)
-      *existing_map_file = std::move(path);
-
-    return true;
-  }
-
-  return false;
-}
-
-bool CBoot::LoadMapFromFilename(const Core::CPUThreadGuard& guard, PPCSymbolDB& ppc_symbol_db)
-{
-  std::string strMapFilename;
-  bool found = FindMapFile(&strMapFilename, nullptr);
-  if (found && ppc_symbol_db.LoadMap(guard, strMapFilename))
-  {
-    Host_PPCSymbolsChanged();
-    return true;
-  }
-
-  return false;
-}
-
 // If ipl.bin is not found, this function does *some* of what BS1 does:
 // loading IPL(BS2) and jumping to it.
 // It does not initialize the hardware or anything else like BS1 does.
@@ -494,7 +461,7 @@ bool CBoot::Load_BS2(Core::System& system, const std::string& boot_rom_filename)
 
   ppc_state.pc = 0x81200150;
 
-  PowerPC::MSRUpdated(ppc_state);
+  system.GetPowerPC().MSRUpdated();
 
   return true;
 }
@@ -524,12 +491,6 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
                    std::unique_ptr<BootParameters> boot)
 {
   SConfig& config = SConfig::GetInstance();
-
-  if (auto& ppc_symbol_db = system.GetPPCSymbolDB(); !ppc_symbol_db.IsEmpty())
-  {
-    ppc_symbol_db.Clear();
-    Host_PPCSymbolsChanged();
-  }
 
   // PAL Wii uses NTSC framerate and linecount in 60Hz modes
   system.GetVideoInterface().Preset(DiscIO::IsNTSC(config.m_region) ||
@@ -570,7 +531,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
 
       auto& ppc_state = system.GetPPCState();
 
-      SetupMSR(ppc_state);
+      SetupMSR(system);
       SetupHID(ppc_state, system.IsWii());
       SetupBAT(system, system.IsWii());
       CopyDefaultExceptionHandlers(system);
@@ -604,17 +565,26 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
         return false;
       }
 
+      AchievementManager::GetInstance().LoadGame(nullptr);
+
       SConfig::OnTitleDirectlyBooted(guard);
 
       ppc_state.pc = executable.reader->GetEntryPoint();
 
       const std::string filename = PathToFileName(executable.path);
 
-      if (executable.reader->LoadSymbols(guard, system.GetPPCSymbolDB(), filename))
+      auto& ppc_symbol_db = system.GetPPCSymbolDB();
+      bool symbols_changed = ppc_symbol_db.Clear();
+
+      if (executable.reader->LoadSymbols(guard, ppc_symbol_db, filename))
       {
-        Host_PPCSymbolsChanged();
+        symbols_changed = true;
         HLE::PatchFunctions(system);
       }
+
+      if (symbols_changed)
+        Host_PPCSymbolsChanged();
+
       return true;
     }
 
@@ -635,6 +605,8 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
       SetDefaultDisc(system.GetDVDInterface());
       if (!BootNANDTitle(system, nand_title.id))
         return false;
+
+      AchievementManager::GetInstance().LoadGame(nullptr);
 
       SConfig::OnTitleDirectlyBooted(guard);
       return true;
@@ -661,6 +633,10 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
         SetDisc(system.GetDVDInterface(), DiscIO::CreateDisc(ipl.disc->path),
                 ipl.disc->auto_disc_change_paths);
       }
+      else
+      {
+        AchievementManager::GetInstance().LoadGame(nullptr);
+      }
 
       SConfig::OnTitleDirectlyBooted(guard);
       return true;
@@ -669,6 +645,7 @@ bool CBoot::BootUp(Core::System& system, const Core::CPUThreadGuard& guard,
     bool operator()(const BootParameters::DFF& dff) const
     {
       NOTICE_LOG_FMT(BOOT, "Booting DFF: {}", dff.dff_path);
+      AchievementManager::GetInstance().LoadGame(nullptr);
       return system.GetFifoPlayer().Open(dff.dff_path);
     }
 

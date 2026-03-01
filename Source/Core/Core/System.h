@@ -5,6 +5,8 @@
 
 #include <memory>
 
+#include "VideoCommon/VideoEvents.h"
+
 class GeometryShaderManager;
 class Interpreter;
 class JitInterface;
@@ -108,8 +110,8 @@ class SystemTimersManager;
 }
 namespace VideoCommon
 {
-class CustomAssetLoader;
-}
+class CustomResourceManager;
+}  // namespace VideoCommon
 namespace VideoInterface
 {
 class VideoInterfaceManager;
@@ -197,7 +199,8 @@ public:
   VertexShaderManager& GetVertexShaderManager() const;
   XFStateManager& GetXFStateManager() const;
   VideoInterface::VideoInterfaceManager& GetVideoInterface() const;
-  VideoCommon::CustomAssetLoader& GetCustomAssetLoader() const;
+  VideoCommon::CustomResourceManager& GetCustomResourceManager() const;
+  VideoEvents& GetVideoEvents() const;
 
 private:
   System();

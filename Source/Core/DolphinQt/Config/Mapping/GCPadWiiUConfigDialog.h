@@ -16,7 +16,7 @@ class GCPadWiiUConfigDialog final : public QDialog
   Q_OBJECT
 public:
   explicit GCPadWiiUConfigDialog(int port, QWidget* parent = nullptr);
-  ~GCPadWiiUConfigDialog();
+  ~GCPadWiiUConfigDialog() override;
 
 private:
   void LoadSettings();

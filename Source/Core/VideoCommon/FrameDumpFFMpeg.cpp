@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "VideoCommon/FrameDumpFFMpeg.h"
+#include "Common/TimeUtil.h"
 
 #if defined(__FreeBSD__)
 #define __STDC_CONSTANT_MACROS 1
@@ -64,6 +65,7 @@ namespace
 {
 AVRational GetTimeBaseForCurrentRefreshRate(s64 max_denominator)
 {
+  // TODO: GetTargetRefreshRate* are not safe from GPU thread.
   auto& vi = Core::System::GetInstance().GetVideoInterface();
   int num;
   int den;
@@ -124,11 +126,15 @@ std::string GetDumpPath(const std::string& extension, std::time_t time, u32 inde
   if (!dump_path.empty())
     return dump_path;
 
+  const auto local_time = Common::LocalTime(time);
+  if (!local_time)
+    return "";
+
   const std::string path_prefix =
       File::GetUserPath(D_DUMPFRAMES_IDX) + SConfig::GetInstance().GetGameID();
 
   const std::string base_name =
-      fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}_{}", path_prefix, fmt::localtime(time), index);
+      fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}_{}", path_prefix, *local_time, index);
 
   const std::string path = fmt::format("{}.{}", base_name, extension);
 
@@ -363,6 +369,7 @@ void FFMpegFrameDump::AddFrame(const FrameData& frame)
   // Calculate presentation timestamp from ticks since start.
   const s64 pts = av_rescale_q(
       frame.state.ticks - m_context->start_ticks,
+      // TODO: GetTicksPerSecond is not safe from GPU thread.
       AVRational{1, int(Core::System::GetInstance().GetSystemTimers().GetTicksPerSecond())},
       m_context->codec->time_base);
 

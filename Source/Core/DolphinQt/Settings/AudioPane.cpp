@@ -38,6 +38,11 @@
 #include "Core/HW/EXI/EXI_DeviceSlippi.h"
 #endif
 
+static QString GetVolumeLabelText(int volume_level)
+{
+  return QWidget::tr("%1%").arg(volume_level);
+}
+
 AudioPane::AudioPane()
 {
   CheckNeedForLatencyControl();
@@ -72,16 +77,26 @@ void AudioPane::CreateWidgets()
   dsp_layout->addWidget(m_dsp_combo, Qt::AlignLeft);
 
   auto* volume_box = new QGroupBox(tr("Volume"));
-  auto* volume_layout = new QVBoxLayout;
+  auto* volume_layout = new QVBoxLayout{volume_box};
+
   m_volume_slider = new ConfigSlider(0, 100, Config::MAIN_AUDIO_VOLUME);
-  m_volume_indicator = new QLabel(tr("%1 %").arg(m_volume_slider->value()));
-
-  volume_box->setLayout(volume_layout);
-
   m_volume_slider->setOrientation(Qt::Vertical);
 
+  // Volume indicator text label.
+  m_volume_indicator = new QLabel;
   m_volume_indicator->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
-  m_volume_indicator->setFixedWidth(QFontMetrics(font()).boundingRect(tr("%1 %").arg(100)).width());
+  auto update_volume_label = [this]() {
+    m_volume_indicator->setText(GetVolumeLabelText(m_volume_slider->value()));
+  };
+  update_volume_label();
+  connect(m_volume_slider, &QSlider::valueChanged, this, std::move(update_volume_label));
+
+  const QFontMetrics font_metrics{font()};
+  const int label_width = font_metrics.boundingRect(GetVolumeLabelText(100)).width();
+  // Ensure the label is at least as wide as the QGroupBox title.
+  // This prevents [-Volume] title uglyness on Windows.
+  const int title_width = font_metrics.boundingRect(volume_box->title()).width();
+  m_volume_indicator->setFixedWidth(std::max(label_width, title_width));
 
   volume_layout->addWidget(m_volume_slider, 0, Qt::AlignHCenter);
   volume_layout->addWidget(m_volume_indicator, 0, Qt::AlignHCenter);
@@ -97,8 +112,7 @@ void AudioPane::CreateWidgets()
     translated_backends.reserve(backends.size());
     for (const std::string& backend : backends)
     {
-      translated_backends.push_back(
-          std::make_pair(tr(backend.c_str()), QString::fromStdString(backend)));
+      translated_backends.emplace_back(tr(backend.c_str()), QString::fromStdString(backend));
     }
     m_backend_combo = new ConfigStringChoice(translated_backends, Config::MAIN_AUDIO_BACKEND);
   }
@@ -171,6 +185,7 @@ void AudioPane::CreateWidgets()
 
   // Set initial value display
   audio_buffer_size_label->setText(tr("%1 ms").arg(audio_buffer_size->value()));
+  audio_buffer_size_label->setFixedWidth(QFontMetrics(font()).boundingRect(tr(" 000 ms")).width());
 
   m_audio_fill_gaps = new ConfigBool(tr("Fill Audio Gaps"), Config::MAIN_AUDIO_FILL_GAPS);
 
@@ -208,11 +223,10 @@ void AudioPane::ConnectWidgets()
   connect(m_backend_combo, &QComboBox::currentIndexChanged, this, &AudioPane::OnBackendChanged);
   connect(m_dolby_pro_logic, &ConfigBool::toggled, this, &AudioPane::OnDspChanged);
   connect(m_dsp_combo, &ConfigComplexChoice::currentIndexChanged, this, &AudioPane::OnDspChanged);
-  connect(m_volume_slider, &QSlider::valueChanged, this, [this](int value) {
-    m_volume_indicator->setText(tr("%1%").arg(value));
-    AudioCommon::UpdateSoundStream(Core::System::GetInstance());
-// slippi change
+
+  // connect jukebox volume to volume slider if not a playback build
 #ifndef IS_PLAYBACK
+  connect(m_volume_slider, &QSlider::valueChanged, this, [this](int value) {
     if (Core::GetState(Core::System::GetInstance()) == Core::State::Running)
     {
       auto& system = Core::System::GetInstance();
@@ -223,9 +237,11 @@ void AudioPane::ConnectWidgets()
       if (slippi_exi != nullptr)
         slippi_exi->UpdateJukeboxDolphinSystemVolume(value);
     }
-#endif
-// end slippi change
   });
+#endif
+
+  connect(m_volume_slider, &QSlider::valueChanged, this,
+          [] { AudioCommon::UpdateSoundStream(Core::System::GetInstance()); });
 
   if (m_latency_control_supported)
   {

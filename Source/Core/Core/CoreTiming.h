@@ -187,6 +187,9 @@ private:
   std::vector<Event> m_event_queue;
   u64 m_event_fifo_id = 0;
   std::mutex m_ts_write_lock;
+
+  // Event objects created from other threads.
+  // The time value of each Event here is a cycles_into_future value.
   Common::SPSCQueue<Event> m_ts_queue;
 
   float m_last_oc_factor = 0.0f;
@@ -201,9 +204,10 @@ private:
   EventType* m_ev_lost = nullptr;
 
   CPUThreadConfigCallback::ConfigChangedCallbackID m_registered_config_callback_id;
-  float m_config_oc_factor = 0.0f;
-  float m_config_oc_inv_factor = 0.0f;
+  float m_config_oc_factor = 1.0f;
+  float m_config_oc_inv_factor = 1.0f;
   bool m_config_sync_on_skip_idle = false;
+  bool m_config_rush_frame_presentation = false;
 
   s64 m_throttle_reference_cycle = 0;
   TimePoint m_throttle_reference_time = Clock::now();
@@ -212,6 +216,7 @@ private:
 
   DT m_max_fallback = {};
   DT m_max_variance = {};
+  bool m_correct_time_drift = false;
   double m_emulation_speed = 1.0;
 
   bool IsSpeedUnlimited() const;
@@ -227,8 +232,12 @@ private:
   Common::PrecisionTimer m_precision_cpu_timer;
   Common::PrecisionTimer m_precision_gpu_timer;
 
+  Common::EventHook m_core_state_changed_hook;
   Common::EventHook m_frame_hook;
-  std::atomic<bool> m_throttled_since_presentation = false;
+
+  // Used to optionally minimize throttling for improving input latency.
+  std::atomic_bool m_throttled_after_presentation = false;
+  DT m_max_throttle_skip_time{};
 };
 
 }  // namespace CoreTiming

@@ -30,7 +30,6 @@
 #include "DolphinQt/Config/ToolTipControls/ToolTipComboBox.h"
 #include "DolphinQt/Config/ToolTipControls/ToolTipPushButton.h"
 #include "DolphinQt/QtUtils/ModalMessageBox.h"
-#include "DolphinQt/QtUtils/SetWindowDecorations.h"
 #include "DolphinQt/QtUtils/SignalBlocking.h"
 #include "DolphinQt/Settings.h"
 
@@ -94,6 +93,8 @@ void GeneralPane::OnEmulationStateChanged(Core::State state)
   m_checkbox_discord_presence->setEnabled(!running);
 #endif
   m_combobox_fallback_region->setEnabled(!running);
+
+  UpdateDescriptionsUsingHardcoreStatus();
 }
 
 void GeneralPane::ConnectLayout()
@@ -105,7 +106,7 @@ void GeneralPane::ConnectLayout()
 #endif
 
   // Advanced
-  connect(m_combobox_speedlimit, &QComboBox::currentIndexChanged, [this]() {
+  connect(m_combobox_speedlimit, &QComboBox::currentIndexChanged, [this] {
     Config::SetBaseOrCurrent(Config::MAIN_EMULATION_SPEED,
                              m_combobox_speedlimit->currentIndex() * 0.1f);
     Config::Save();
@@ -289,7 +290,6 @@ void GeneralPane::GenerateNewIdentity()
   message_box.setIcon(QMessageBox::Information);
   message_box.setWindowTitle(tr("Identity Generation"));
   message_box.setText(tr("New identity generated."));
-  SetQWidgetWindowDecorations(&message_box);
   message_box.exec();
 }
 #endif
@@ -301,7 +301,7 @@ void GeneralPane::AddDescriptions()
                  "burden by spreading Dolphin's heaviest load across two cores, which usually "
                  "improves performance. However, it can result in glitches and crashes."
                  "<br><br>This setting cannot be changed while emulation is active."
-                 "<br><br><dolphin_emphasis>If unsure, leave this checked.</dolphin_emphasis>");
+                 "<br><br><dolphin_emphasis>If unsure, leave this unchecked.</dolphin_emphasis>");
   static constexpr char TR_CHEATS_DESCRIPTION[] = QT_TR_NOOP(
       "Enables the use of AR and Gecko cheat codes which can be used to modify games' behavior. "
       "These codes can be configured with the Cheats Manager in the Tools menu."
@@ -327,12 +327,6 @@ void GeneralPane::AddDescriptions()
                  "<br><br>This setting cannot be changed while emulation is active."
                  "<br><br><dolphin_emphasis>If unsure, leave this checked.</dolphin_emphasis>");
 #endif
-  static constexpr char TR_SPEEDLIMIT_DESCRIPTION[] =
-      QT_TR_NOOP("Controls how fast emulation runs relative to the original hardware."
-                 "<br><br>Values higher than 100% will emulate faster than the original hardware "
-                 "can run, if your hardware is able to keep up. Values lower than 100% will slow "
-                 "emulation instead. Unlimited will emulate as fast as your hardware is able to."
-                 "<br><br><dolphin_emphasis>If unsure, select 100%.</dolphin_emphasis>");
   static constexpr char TR_UPDATE_TRACK_DESCRIPTION[] = QT_TR_NOOP(
       "Selects which update track Dolphin uses when checking for updates at startup. If a new "
       "update is available, Dolphin will show a list of changes made since your current version "
@@ -380,7 +374,6 @@ void GeneralPane::AddDescriptions()
 #endif
 
   m_combobox_speedlimit->SetTitle(tr("Speed Limit"));
-  m_combobox_speedlimit->SetDescription(tr(TR_SPEEDLIMIT_DESCRIPTION));
 
   if (AutoUpdateChecker::SystemSupportsAutoUpdates())
   {
@@ -397,4 +390,31 @@ void GeneralPane::AddDescriptions()
   m_button_generate_new_identity->SetTitle(tr("Generate a New Statistics Identity"));
   m_button_generate_new_identity->SetDescription(tr(TR_GENERATE_NEW_IDENTITY_DESCRIPTION));
 #endif
+}
+
+void GeneralPane::UpdateDescriptionsUsingHardcoreStatus()
+{
+  const bool hardcore_enabled = AchievementManager::GetInstance().IsHardcoreModeActive();
+
+  static constexpr char TR_SPEEDLIMIT_DESCRIPTION[] =
+      QT_TR_NOOP("Controls how fast emulation runs relative to the original hardware."
+                 "<br><br>Values higher than 100% will emulate faster than the original hardware "
+                 "can run, if your hardware is able to keep up. Values lower than 100% will slow "
+                 "emulation instead. Unlimited will emulate as fast as your hardware is able to."
+                 "<br><br><dolphin_emphasis>If unsure, select 100%.</dolphin_emphasis>");
+  static constexpr char TR_SPEEDLIMIT_RESTRICTION_IN_HARDCORE_DESCRIPTION[] =
+      QT_TR_NOOP("<dolphin_emphasis>When Hardcore Mode is enabled, Speed Limit values less than "
+                 "100% will be treated as 100%.</dolphin_emphasis>");
+
+  if (hardcore_enabled)
+  {
+    m_combobox_speedlimit->SetDescription(
+        tr("%1<br><br>%2")
+            .arg(tr(TR_SPEEDLIMIT_DESCRIPTION))
+            .arg(tr(TR_SPEEDLIMIT_RESTRICTION_IN_HARDCORE_DESCRIPTION)));
+  }
+  else
+  {
+    m_combobox_speedlimit->SetDescription(tr(TR_SPEEDLIMIT_DESCRIPTION));
+  }
 }

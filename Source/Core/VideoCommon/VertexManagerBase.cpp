@@ -118,11 +118,12 @@ VertexManagerBase::~VertexManagerBase() = default;
 
 bool VertexManagerBase::Initialize()
 {
+  auto& video_events = GetVideoEvents();
+
   m_frame_end_event =
-      AfterFrameEvent::Register([this](Core::System&) { OnEndFrame(); }, "VertexManagerBase");
-  m_after_present_event = AfterPresentEvent::Register(
-      [this](const PresentInfo& pi) { m_ticks_elapsed = pi.emulated_timestamp; },
-      "VertexManagerBase");
+      video_events.after_frame_event.Register([this](Core::System&) { OnEndFrame(); });
+  m_after_present_event = video_events.after_present_event.Register(
+      [this](const PresentInfo& pi) { m_ticks_elapsed = pi.emulated_timestamp; });
   m_index_generator.Init();
   m_custom_shader_cache = std::make_unique<CustomShaderCache>();
   m_cpu_cull.Init();
@@ -442,7 +443,7 @@ void VertexManagerBase::Flush()
   if (m_draw_counter == 0)
   {
     // This is more or less the start of the Frame
-    BeforeFrameEvent::Trigger();
+    GetVideoEvents().before_frame_event.Trigger();
   }
 
   if (xfmem.numTexGen.numTexGens != bpmem.genMode.numtexgens ||
@@ -459,13 +460,11 @@ void VertexManagerBase::Flush()
     // eventually simulate the behavior we have test cases for it.
     if (xfmem.numTexGen.numTexGens != bpmem.genMode.numtexgens)
     {
-      DolphinAnalytics::Instance().ReportGameQuirk(
-          GameQuirk::MISMATCHED_GPU_TEXGENS_BETWEEN_XF_AND_BP);
+      DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::MismatchedGPUTexGensBetweenXFAndBP);
     }
     if (xfmem.numChan.numColorChans != bpmem.genMode.numcolchans)
     {
-      DolphinAnalytics::Instance().ReportGameQuirk(
-          GameQuirk::MISMATCHED_GPU_COLORS_BETWEEN_XF_AND_BP);
+      DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::MismatchedGPUColorsBetweenXFAndBP);
     }
 
     return;
@@ -474,8 +473,8 @@ void VertexManagerBase::Flush()
 #if defined(_DEBUG) || defined(DEBUGFAST)
   PRIM_LOG("frame{}:\n texgen={}, numchan={}, dualtex={}, ztex={}, cole={}, alpe={}, ze={}",
            g_ActiveConfig.iSaveTargetId, xfmem.numTexGen.numTexGens, xfmem.numChan.numColorChans,
-           xfmem.dualTexTrans.enabled, bpmem.ztex2.op.Value(), bpmem.blendmode.colorupdate.Value(),
-           bpmem.blendmode.alphaupdate.Value(), bpmem.zmode.updateenable.Value());
+           xfmem.dualTexTrans.enabled, bpmem.ztex2.op.Value(), bpmem.blendmode.color_update.Value(),
+           bpmem.blendmode.alpha_update.Value(), bpmem.zmode.update_enable.Value());
 
   for (u32 i = 0; i < xfmem.numChan.numColorChans; ++i)
   {

@@ -30,6 +30,10 @@ set(CMAKE_USER_MAKE_RULES_OVERRIDE "${CMAKE_CURRENT_SOURCE_DIR}/CMake/FlagsOverr
 
 project(dolphin-emu)
 
+if (CMAKE_VERSION VERSION_LESS "3.25" AND CMAKE_SYSTEM_NAME MATCHES "Linux")
+  set(LINUX TRUE)
+endif()
+
 if (MSVC)
   if (POLICY CMP0117)
     # cmake is a weird language. You can't do if(not POLICY)
@@ -132,8 +136,6 @@ option(ENCODE_FRAMEDUMPS "Encode framedumps in AVI format" ON)
 
 option(ENABLE_GPROF "Enable gprof profiling (must be using Debug build)" OFF)
 option(FASTLOG "Enable all logs" OFF)
-option(GDBSTUB "Enable gdb stub for remote debugging." OFF)
-option(OPROFILING "Enable profiling" OFF)
 
 # TODO: Add DSPSpy
 option(DSPTOOL "Build dsptool" OFF)
@@ -151,6 +153,8 @@ else()
 endif()
 
 if(APPLE)
+  enable_language(OBJC)
+  enable_language(OBJCXX)
   option(MACOS_USE_DEFAULT_SEARCH_PATH "Don't prioritize system library paths" OFF)
   option(SKIP_POSTPROCESS_BUNDLE "Skip postprocessing bundle for redistributability" OFF)
   # Enable adhoc code signing by default (otherwise makefile builds on ARM will not work)
@@ -181,6 +185,7 @@ list(APPEND CMAKE_MODULE_PATH
 # Support functions
 include(CheckAndAddFlag)
 include(CheckCCompilerFlag)
+include(CheckSymbolExists)
 include(DolphinCompileDefinitions)
 include(DolphinDisableWarningsMSVC)
 include(DolphinLibraryTools)
@@ -578,16 +583,6 @@ if(ENCODE_FRAMEDUMPS)
   endif()
 endif()
 
-if(OPROFILING)
-  find_package(OProfile)
-  if(OPROFILE_FOUND)
-    message(STATUS "OProfile found, enabling profiling support")
-    add_definitions(-DUSE_OPROFILE=1)
-  else()
-    message(FATAL_ERROR "OProfile not found. Can't build profiling support.")
-  endif()
-endif()
-
 if(ENABLE_HWDB)
   find_package(LIBUDEV REQUIRED)
   if(LIBUDEV_FOUND)
@@ -618,7 +613,7 @@ if(UNIX)
 endif()
 
 if(ENABLE_SDL)
-  dolphin_find_optional_system_library(SDL2 Externals/SDL 2.30.9)
+  dolphin_find_optional_system_library(SDL3 Externals/SDL 3.2.0)
 endif()
 
 if(ENABLE_ANALYTICS)
@@ -688,7 +683,9 @@ dolphin_find_optional_system_library_pkgconfig(FMT
 
 add_subdirectory(Externals/imgui)
 add_subdirectory(Externals/implot)
-add_subdirectory(Externals/glslang)
+
+dolphin_find_optional_system_library(glslang Externals/glslang DOLPHIN_TRY_VERSIONS 15 16)
+
 # SPIRV-Cross is used on Windows for GLSL to HLSL conversion for the Direct3D 11 and Direct3D 12
 # video backends, and on Apple devices for the Metal video backend.
 if(WIN32 OR APPLE)
@@ -737,8 +734,8 @@ dolphin_find_optional_system_library_pkgconfig(ZSTD libzstd>=1.4.0 zstd::zstd Ex
 
 dolphin_find_optional_system_library_pkgconfig(ZLIB zlib>=1.3.1 ZLIB::ZLIB Externals/zlib-ng)
 
-dolphin_find_optional_system_library_pkgconfig(MINIZIP
-  "minizip>=4.0.4" minizip::minizip Externals/minizip-ng
+dolphin_find_optional_system_library_pkgconfig(minizip-ng
+  "minizip-ng>=4.0.4" minizip-ng::minizip-ng Externals/minizip-ng
 )
 
 dolphin_find_optional_system_library(LZO Externals/LZO)
@@ -781,11 +778,13 @@ dolphin_find_optional_system_library(MBEDTLS Externals/mbedtls 2.28)
 
 dolphin_find_optional_system_library(CURL Externals/curl)
 
-if(NOT ANDROID)
-  dolphin_find_optional_system_library(Iconv Externals/libiconv-1.14)
-else()
-  message(STATUS "Using static iconv from Externals")
-  add_subdirectory(Externals/libiconv-1.14 EXCLUDE_FROM_ALL)
+if(NOT WIN32)
+  if(NOT ANDROID)
+    dolphin_find_optional_system_library(Iconv Externals/libiconv 1.14)
+  else()
+    message(STATUS "Using static iconv from Externals")
+    add_subdirectory(Externals/libiconv EXCLUDE_FROM_ALL)
+  endif()
 endif()
 
 if(NOT ANDROID)
@@ -802,7 +801,7 @@ if(NOT ENABLE_QT)
   set(USE_MGBA 0)
 endif()
 if(USE_MGBA)
-  dolphin_find_optional_system_library(LIBMGBA Externals/mGBA)
+  dolphin_find_optional_system_library(LIBMGBA Externals/mGBA 0.11)
 endif()
 
 find_package(SYSTEMD)
@@ -828,6 +827,12 @@ add_subdirectory(Externals/FatFs)
 
 if (USE_RETRO_ACHIEVEMENTS)
 	add_subdirectory(Externals/rcheevos)
+endif()
+
+add_subdirectory(Externals/watcher)
+
+if(WIN32 OR LINUX)
+  add_subdirectory(Externals/cpp-ipc)
 endif()
 
 ########################################

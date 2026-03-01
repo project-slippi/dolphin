@@ -15,6 +15,7 @@
 #include "Common/ChunkFile.h"
 #include "Common/Logging/Log.h"
 #include "Common/SPSCQueue.h"
+#include "Common/ScopeGuard.h"
 
 #include "Core/AchievementManager.h"
 #include "Core/CPUThreadConfigCallback.h"
@@ -107,21 +108,30 @@ void CoreTimingManager::Init()
   m_last_oc_factor = m_config_oc_factor;
   m_globals.last_OC_factor_inverted = m_config_oc_inv_factor;
 
-  m_throttled_since_presentation = false;
-  m_frame_hook = AfterPresentEvent::Register(
-      [this](const PresentInfo&) {
-        m_throttled_since_presentation.store(false, std::memory_order_relaxed);
-      },
-      "CoreTiming AfterPresentEvent");
+  m_core_state_changed_hook = Core::AddOnStateChangedCallback([this](Core::State state) {
+    if (state == Core::State::Running)
+    {
+      // We don't want Throttle to attempt catch-up for all the time lost while paused.
+      ResetThrottle(GetTicks());
+    }
+  });
+
+  m_throttled_after_presentation = false;
+  m_frame_hook = m_system.GetVideoEvents().after_present_event.Register([this](const PresentInfo&) {
+    m_throttled_after_presentation.store(false, std::memory_order_relaxed);
+  });
 }
 
 void CoreTimingManager::Shutdown()
 {
+  m_core_state_changed_hook.reset();
+
   std::lock_guard lk(m_ts_write_lock);
   MoveEvents();
   ClearPendingEvents();
   UnregisterAllEvents();
   CPUThreadConfigCallback::RemoveConfigChangedCallback(m_registered_config_callback_id);
+  m_frame_hook.reset();
 }
 
 void CoreTimingManager::RefreshConfig()
@@ -132,12 +142,19 @@ void CoreTimingManager::RefreshConfig()
                                                        1.0f);
   m_config_oc_inv_factor = 1.0f / m_config_oc_factor;
   m_config_sync_on_skip_idle = Config::Get(Config::MAIN_SYNC_ON_SKIP_IDLE);
+  m_config_rush_frame_presentation = Config::Get(Config::MAIN_RUSH_FRAME_PRESENTATION);
+
+  // We don't want to skip so much throttling that the audio buffer overfills.
+  m_max_throttle_skip_time =
+      std::chrono::milliseconds{Config::Get(Config::MAIN_AUDIO_BUFFER_SIZE)} / 2;
 
   // A maximum fallback is used to prevent the system from sleeping for
   // too long or going full speed in an attempt to catch up to timings.
   m_max_fallback = std::chrono::duration_cast<DT>(DT_ms(Config::Get(Config::MAIN_MAX_FALLBACK)));
 
   m_max_variance = std::chrono::duration_cast<DT>(DT_ms(Config::Get(Config::MAIN_TIMING_VARIANCE)));
+
+  m_correct_time_drift = Config::Get(Config::MAIN_CORRECT_TIME_DRIFT);
 
   if (AchievementManager::GetInstance().IsHardcoreModeActive() &&
       Config::Get(Config::MAIN_EMULATION_SPEED) < 1.0f &&
@@ -278,7 +295,7 @@ void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_t
     }
 
     std::lock_guard lk(m_ts_write_lock);
-    m_ts_queue.Push(Event{m_globals.global_timer + cycles_into_future, 0, userdata, event_type});
+    m_ts_queue.Push(Event{cycles_into_future, 0, userdata, event_type});
   }
 }
 
@@ -315,10 +332,14 @@ void CoreTimingManager::ForceExceptionCheck(s64 cycles)
 
 void CoreTimingManager::MoveEvents()
 {
-  for (Event ev; m_ts_queue.Pop(ev);)
+  while (!m_ts_queue.Empty())
   {
+    auto& ev = m_event_queue.emplace_back(m_ts_queue.Front());
+    m_ts_queue.Pop();
+
     ev.fifo_order = m_event_fifo_id++;
-    m_event_queue.emplace_back(std::move(ev));
+    ev.time += m_globals.global_timer;
+
     std::ranges::push_heap(m_event_queue, std::ranges::greater{});
   }
 }
@@ -345,14 +366,7 @@ void CoreTimingManager::Advance()
     Event evt = std::move(m_event_queue.front());
     std::ranges::pop_heap(m_event_queue, std::ranges::greater{});
     m_event_queue.pop_back();
-
-    // commented out the old setup
-    Throttle(evt.time);
-    if (evt.type != nullptr)  // slippi change
-    {
-      evt.type->callback(m_system, evt.userdata, m_globals.global_timer - evt.time);
-    }
-    // evt.type->callback(m_system, evt.userdata, m_globals.global_timer - evt.time);
+    evt.type->callback(m_system, evt.userdata, m_globals.global_timer - evt.time);
   }
 
   m_is_global_timer_sane = false;
@@ -424,17 +438,23 @@ void CoreTimingManager::Throttle(const s64 target_cycle)
   const TimePoint time = Clock::now();
 
   const bool already_throttled =
-      m_throttled_since_presentation.exchange(true, std::memory_order_relaxed);
+      m_throttled_after_presentation.exchange(true, std::memory_order_relaxed);
 
-  // When Immediate XFB is enabled, try to Throttle just once since each presentation.
-  //  This lowers latency by speeding through to the next presentation after grabbing input.
+  // If RushFramePresentation is enabled, try to Throttle just once after each presentation.
+  //  This lowers input latency by speeding through to presentation after grabbing input.
   // Make sure we don't get too far ahead of proper timing though,
-  //  otherwise the emulator unreasonably speeds through loading screens that don't have XFB copies.
-  const bool skip_throttle = already_throttled && g_ActiveConfig.bImmediateXFB &&
-                             ((GetTargetHostTime(target_cycle) - time) < (m_max_fallback / 2));
-
+  //  otherwise the emulator unreasonably speeds through loading screens that don't have XFB copies,
+  //  making audio sound terrible.
+  const bool skip_throttle = already_throttled && m_config_rush_frame_presentation &&
+                             ((GetTargetHostTime(target_cycle) - time) < m_max_throttle_skip_time);
   if (skip_throttle)
     return;
+
+  // Measure current performance after throttling.
+  Common::ScopeGuard perf_marker{[&] {
+    g_perf_metrics.CountPerformanceMarker(target_cycle,
+                                          m_system.GetSystemTimers().GetTicksPerSecond());
+  }};
 
   if (IsSpeedUnlimited())
   {
@@ -456,7 +476,9 @@ void CoreTimingManager::Throttle(const s64 target_cycle)
   TimePoint target_time = CalculateTargetHostTimeInternal(target_cycle);
 
   const TimePoint min_target = time - m_max_fallback;
-  if (target_time < min_target)
+
+  // "Correct Time Drift" setting prevents timing relaxing.
+  if (!m_correct_time_drift && target_time < min_target)
   {
     // Core is running too slow.. i.e. CPU bottleneck.
     const DT adjustment = min_target - target_time;
