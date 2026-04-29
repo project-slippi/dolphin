@@ -165,10 +165,10 @@ while [[ "${1:0:1}" = "-" ]]; do
 			shift;;
 		--hdiutil-quiet)
 			HDIUTIL_VERBOSITY='-quiet'
-			shift;; 
+			shift;;
 		--sandbox-safe)
 			SANDBOX_SAFE=1
-			shift;; 
+			shift;;
 		--rez)
 			echo "REZ is no more directly used. You can remove the --rez argument."
 			shift; shift;;
@@ -270,7 +270,7 @@ fi
 if [[ $SANDBOX_SAFE -eq 0 ]]; then
 	hdiutil create ${HDIUTIL_VERBOSITY} -srcfolder "$SRC_FOLDER" -volname "${VOLUME_NAME}" \
 		-fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW ${CUSTOM_SIZE} "${DMG_TEMP_NAME}"
-else	
+else
 	hdiutil makehybrid ${HDIUTIL_VERBOSITY} -default-volume-name "${VOLUME_NAME}" -hfs -o "${DMG_TEMP_NAME}" "$SRC_FOLDER"
 	hdiutil convert -format UDRW -ov -o "${DMG_TEMP_NAME}" "${DMG_TEMP_NAME}"
 	DISK_IMAGE_SIZE_CUSTOM=$DISK_IMAGE_SIZE
@@ -369,7 +369,7 @@ else
 			| perl -pe "s/APPLICATION_CLAUSE/$APPLICATION_CLAUSE/g" \
 			| perl -pe "s/HIDING_CLAUSE/$HIDING_CLAUSE/" \
 			> "$APPLESCRIPT_FILE"
-		sleep 2 # pause to workaround occasional "Can’t get disk" (-1728) issues  
+		sleep 2 # pause to workaround occasional "Can’t get disk" (-1728) issues
 		echo "Running AppleScript to make Finder stuff pretty: /usr/bin/osascript \"${APPLESCRIPT_FILE}\" \"${VOLUME_NAME}\""
 		if /usr/bin/osascript "${APPLESCRIPT_FILE}" "${VOLUME_NAME}"; then
 			# Okay, we're cool
@@ -393,7 +393,11 @@ echo "Done fixing permissions"
 # Make the top window open itself on mount:
 if [[ $SANDBOX_SAFE -eq 0 ]]; then
 	echo "Blessing started"
-	bless --folder "${MOUNT_DIR}" --openfolder "${MOUNT_DIR}"
+	if [ $(uname -m) == "arm64" ]; then
+		bless --folder "${MOUNT_DIR}"
+	else
+		bless --folder "${MOUNT_DIR}" --openfolder "${MOUNT_DIR}"
+	fi
 	echo "Blessing finished"
 else
 	echo "Skipping blessing on sandbox"
@@ -409,7 +413,7 @@ echo "Unmounting disk image..."
 for n in `seq 1 5`
 do
     hdiutil detach "${DEV_NAME}" && break
-    
+
     if [ $n = 5 ]; then
         echo "Alright I guess we'll force unmount"
         # This is dangerous.
@@ -448,7 +452,7 @@ if [[ -n "${EULA_RSRC}" && "${EULA_RSRC}" != "-null-" ]]; then
 	# EULA_DATA="$(base64 -b 52 "${EULA_RSRC}" | sed s$'/^\(.*\)$/\t\t\t\\1/')"
 	EULA_DATA="$(openssl base64 -in "${EULA_RSRC}" | tr -d '\n' | awk '{gsub(/.{52}/,"&\n")}1' | sed s$'/^\(.*\)$/\t\t\t\\1/')"
 	# Fill the template with the custom EULA contents
-	eval "cat > \"${EULA_RESOURCES_FILE}\" <<EOF                                                                                                                  
+	eval "cat > \"${EULA_RESOURCES_FILE}\" <<EOF
 	$(<${CDMG_SUPPORT_DIR}/eula-resources-template.xml)
 	EOF
 	"

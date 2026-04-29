@@ -111,7 +111,7 @@ option(ENABLE_LLVM "Enables LLVM support, for disassembly" ON)
 option(ENABLE_TESTS "Enables building the unit tests" ON)
 option(ENABLE_VULKAN "Enables vulkan video backend" ON)
 option(USE_DISCORD_PRESENCE "Enables Discord Rich Presence, show the current game on Discord" ON)
-# slippi change: the following options are set to off because they are not useful to us 
+# slippi change: the following options are set to off because they are not useful to us
 option(USE_MGBA "Enables GBA controllers emulation using libmgba" OFF)
 option(ENABLE_AUTOUPDATE "Enables support for automatic updates" OFF)
 option(USE_RETRO_ACHIEVEMENTS "Enables integration with retroachievements.org" OFF)
@@ -624,6 +624,15 @@ endif()
 if(ENABLE_ANALYTICS)
   message(STATUS "Enabling analytics collection (subject to end-user opt-in)")
   add_definitions(-DUSE_ANALYTICS=1)
+endif()
+
+# Slippi Stuff
+if(APPLE)
+	if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+		set(Rust_CARGO_TARGET "x86_64-apple-darwin")
+	elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+		set(Rust_CARGO_TARGET "aarch64-apple-darwin")
+	endif()
 endif()
 
 # slippi change

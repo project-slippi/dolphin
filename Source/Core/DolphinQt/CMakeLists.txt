@@ -677,7 +677,7 @@ if(APPLE)
   if(NOT SKIP_POSTPROCESS_BUNDLE)
     # Update library references to make the bundle portable
     include(DolphinPostprocessBundle)
-    dolphin_postprocess_bundle(dolphin-emu)
+    dolphin_postprocess_bundle(dolphin-emu ${CMAKE_SYSTEM_PROCESSOR})
     # Fix rpath
     add_custom_command(TARGET dolphin-emu
       POST_BUILD COMMAND

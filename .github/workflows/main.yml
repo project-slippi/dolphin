@@ -3,9 +3,9 @@ name: Builds
 on:
   push:
     branches:
-        - "**"
+      - "**"
     paths-ignore:
-        - "**.md"
+      - "**.md"
   pull_request:
     branches:
       - slippi
@@ -69,15 +69,15 @@ jobs:
       - name: "Install Rust"
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: ${{ steps.rust_ver.outputs.rust_ver }}  # Pin to our specific Rust version.
-          rustflags: ""  # Disable default injection of warnings = errors.
+          toolchain: ${{ steps.rust_ver.outputs.rust_ver }} # Pin to our specific Rust version.
+          rustflags: "" # Disable default injection of warnings = errors.
       - name: Cache Utils
         uses: actions/cache@v4
         with:
           path: |
             ./CodeSignTool/
           key: ${{ runner.os }}-${{ secrets.CACHE_CONTROL }}
-      - name: 'Fetch Git Tags'
+      - name: "Fetch Git Tags"
         shell: bash
         run: |
           git fetch --prune --unshallow
@@ -170,9 +170,9 @@ jobs:
       - name: "Install Rust"
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: ${{ steps.rust_ver.outputs.rust_ver }}  # Pin to our specific Rust version.
-          rustflags: ""  # Disable default injection of warnings = errors.
-      - name: 'Fetch Git Tags'
+          toolchain: ${{ steps.rust_ver.outputs.rust_ver }} # Pin to our specific Rust version.
+          rustflags: "" # Disable default injection of warnings = errors.
+      - name: "Fetch Git Tags"
         run: |
           git fetch --prune --unshallow
           echo "GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
@@ -247,7 +247,7 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           path: "./artifact/"
-  macOS:
+  macOS-x86_64:
     needs: [pre_build]
     if: ${{ needs.pre_build.outputs.should_skip != 'true' }}
     strategy:
@@ -275,9 +275,9 @@ jobs:
       - name: "Install Rust"
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: ${{ steps.rust_ver.outputs.rust_ver }}  # Pin to our specific Rust version.
-          rustflags: ""  # Disable default injection of warnings = errors.
-      - name: 'Fetch Git Tags'
+          toolchain: ${{ steps.rust_ver.outputs.rust_ver }} # Pin to our specific Rust version.
+          rustflags: "" # Disable default injection of warnings = errors.
+      - name: "Fetch Git Tags"
         run: |
           git fetch --prune --unshallow
           echo "GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
@@ -320,12 +320,12 @@ jobs:
           chmod +x Tools/load-macos-certs-ci.sh && ./Tools/load-macos-certs-ci.sh
           mkdir -p ~/private_keys/
           echo '${{ secrets.APPLE_CONNECT_API_KEY }}' > ~/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
-          /usr/bin/codesign -f -s "${{ secrets.APPLE_IDENTITY_HASH }}" --deep --options runtime --entitlements Source/Core/DolphinQt/DolphinEmu.entitlements ./build/Binaries/Slippi_Dolphin.app
+          /usr/bin/codesign -f -s "${{ secrets.APPLE_IDENTITY_HASH }}" --deep --options runtime --entitlements Source/Core/DolphinQt/DolphinEmu.entitlements ./build/x86_64/Binaries/Slippi_Dolphin.app
       - name: "Package DMG"
         shell: bash
         working-directory: ${{ github.workspace }}
         run: |
-          chmod +x Tools/create-dmg/run.sh 
+          chmod +x Tools/create-dmg/run.sh
           ./Tools/create-dmg/run.sh --no-internet-enable \
             --volname "Slippi Dolphin Beta Installer" \
             --volicon "Data/slippi_dmg_icon.icns" \
@@ -338,7 +338,130 @@ jobs:
             --icon "Slippi_Dolphin.app" 140 196 \
             --hide-extension "Slippi_Dolphin.app" \
             "${{ env.FILE_NAME }}.dmg" \
-            "./build/Binaries/"
+            "./build/x86_64/Binaries/"
+          mv "${{ env.FILE_NAME }}.dmg" artifact/
+      - name: "Sign and Notarize ${{ matrix.build_type }} Release DMG"
+        if: env.CERTIFICATE_MACOS_APPLICATION != null
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+          CERTIFICATE_MACOS_APPLICATION: ${{ secrets.CERTIFICATE_MACOS_APPLICATION }}
+        run: |
+          /usr/bin/codesign -f -s "${{ secrets.APPLE_IDENTITY_HASH }}" --deep --options runtime ./artifact/${{ env.FILE_NAME }}.dmg
+          chmod +x Tools/notarize_netplay.sh && ./Tools/notarize_netplay.sh ./artifact/${{ env.FILE_NAME }}.dmg
+      - name: "Publish"
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: "./artifact/"
+  macOS-universal:
+    needs: [pre_build]
+    if: ${{ needs.pre_build.outputs.should_skip != 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Netplay, Playback]
+        include:
+          - build_type: Netplay
+            artifact_name: mainline-macOS-netplay-universal
+            build_config: netplay
+          - build_type: Playback
+            artifact_name: mainline-macOS-playback-universal
+            build_config: playback
+    name: "macOS ${{ matrix.build_type }} universal"
+    runs-on: macos-14
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - id: rust_ver
+        name: Grab Rust Version
+        shell: bash
+        run: echo "rust_ver=$(sed -rn 's/^channel = "(.*)"/\1/p' ./Externals/SlippiRustExtensions/rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - name: "Install Rust"
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: x86_64-apple-darwin
+          toolchain: ${{ steps.rust_ver.outputs.rust_ver }} # Pin to our specific Rust version.
+          rustflags: "" # Disable default injection of warnings = errors.
+      - name: "Fetch Git Tags"
+        run: |
+          git fetch --prune --unshallow
+          echo "GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
+          echo "GIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "GIT_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
+          echo "CURR_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
+      - name: "Download and Install prerequisites"
+        shell: bash
+        run: |
+          rm '/usr/local/bin/2to3' || true
+          echo "HOMEBREW_NO_AUTO_UPDATE=1" >> $GITHUB_ENV
+          brew install \
+          ffmpeg \
+          libpng \
+          pkgconfig \
+          libao \
+          sound-touch \
+          hidapi \
+          qt@6
+          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          arch -x86_64 /usr/local/bin/brew install \
+          ffmpeg \
+          libpng \
+          pkgconfig \
+          libao \
+          sound-touch \
+          hidapi \
+          qt@6
+#         brew upgrade cmake
+      - name: "Build ${{ matrix.build_type }} Dolphin"
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        env:
+          CERTIFICATE_MACOS_APPLICATION: ${{ secrets.CERTIFICATE_MACOS_APPLICATION }}
+        run: |
+          export LIBRARY_PATH=$LIBRARY_PATH:/usr/local/lib
+          mkdir build
+          cd build
+          python3 ../BuildMacOSUniversalSlippiBinary.py --build_config ${{ matrix.build_config }}
+          cd ..
+          mkdir artifact
+          FILE_NAME=${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}
+          echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
+      - name: "Codesign ${{ matrix.build_type}} Dolphin"
+        if: env.CERTIFICATE_MACOS_APPLICATION != null
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        env:
+          CERTIFICATE_MACOS_APPLICATION: ${{ secrets.CERTIFICATE_MACOS_APPLICATION }}
+          CERTIFICATE_MACOS_PASSWORD: ${{ secrets.CERTIFICATE_MACOS_PASSWORD }}
+        run: |
+          chmod +x Tools/load-macos-certs-ci.sh && ./Tools/load-macos-certs-ci.sh
+          mkdir -p ~/private_keys/
+          echo '${{ secrets.APPLE_CONNECT_API_KEY }}' > ~/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          /usr/bin/codesign -f -s "${{ secrets.APPLE_IDENTITY_HASH }}" --deep --options runtime --entitlements Source/Core/DolphinQt/DolphinEmu.entitlements ./build/universal/Slippi_Dolphin.app
+      - name: "Package DMG"
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          chmod +x Tools/create-dmg/run.sh
+          ./Tools/create-dmg/run.sh --no-internet-enable \
+            --volname "Slippi Dolphin Beta Installer" \
+            --volicon "Data/slippi_dmg_icon.icns" \
+            --background "Data/slippi_dmg_background.png" \
+            --text-size 14 \
+            --window-pos 200 120 \
+            --window-size 590 610 \
+            --icon-size 100 \
+            --app-drop-link 440 196 \
+            --icon "Slippi_Dolphin.app" 140 196 \
+            --hide-extension "Slippi_Dolphin.app" \
+            "${{ env.FILE_NAME }}.dmg" \
+            "./build/universal/"
           mv "${{ env.FILE_NAME }}.dmg" artifact/
       - name: "Sign and Notarize ${{ matrix.build_type }} Release DMG"
         if: env.CERTIFICATE_MACOS_APPLICATION != null

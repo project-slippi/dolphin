@@ -59,7 +59,7 @@ dolphin_inject_version_info(MacUpdater)
 if(NOT SKIP_POSTPROCESS_BUNDLE)
   # Update library references to make the bundle portable
   include(DolphinPostprocessBundle)
-  dolphin_postprocess_bundle(MacUpdater)
+  dolphin_postprocess_bundle(MacUpdater ${CMAKE_SYSTEM_PROCESSOR})
 
   # Fix rpath
   add_custom_command(TARGET MacUpdater

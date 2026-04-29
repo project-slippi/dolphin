@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-The current tooling supported in CMake, Homebrew, and Qt5 are insufficient for
+The current tooling supported in CMake, Homebrew, and Qt6 are insufficient for
 creating macOS universal binaries automatically for applications like Dolphin
 which have more complicated build requirements (like different libraries, build
 flags and source files for each target architecture).
@@ -38,7 +38,7 @@ import subprocess
 DEFAULT_CONFIG = {
 
     # Location of destination universal binary
-    "dst_app": "universal/",
+    "dst_app": "universal",
     # Build Target (dolphin-emu to just build the emulator and skip the tests)
     "build_target": "ALL_BUILD",
 
@@ -46,23 +46,19 @@ DEFAULT_CONFIG = {
     "arm64_cmake_prefix":  "/opt/homebrew",
     "x86_64_cmake_prefix": "/usr/local",
 
-    # Locations to qt5 directories for arm and x64 libraries
+    # Locations to qt6 directories for arm and x64 libraries
     # The default values of these paths are taken from the default
     # paths used for homebrew
-    "arm64_qt5_path":  "/opt/homebrew/opt/qt5",
-    "x86_64_qt5_path": "/usr/local/opt/qt5",
+    "arm64_qt6_path":  "/opt/homebrew/opt/qt6",
+    "x86_64_qt6_path": "/usr/local/opt/qt6",
 
     # Identity to use for code signing. "-" indicates that the app will not
     # be cryptographically signed/notarized but will instead just use a
     # SHA checksum to verify the integrity of the app. This doesn't
     # protect against malicious actors, but it does protect against
     # running corrupted binaries and allows for access to the extended
-    # permisions needed for ARM builds
+    # permissions needed for ARM builds
     "codesign_identity":  "-",
-
-    # Minimum macOS version for each architecture slice
-    "arm64_mac_os_deployment_target":  "11.0.0",
-    "x86_64_mac_os_deployment_target": "10.15.0",
 
     # CMake Generator to use for building
     "generator": "Unix Makefiles",
@@ -71,13 +67,16 @@ DEFAULT_CONFIG = {
     "run_unit_tests": False,
 
     # Whether our autoupdate functionality is enabled or not.
-    "autoupdate": True,
+    "autoupdate": False,
 
     # The distributor for this build.
-    "distributor": "None"
+    "distributor": "None",
+
+    # Slippi Dolphin build.
+    "build_config": "netplay"
 }
 
-# Architectures to build for. This is explicity left out of the command line
+# Architectures to build for. This is explicitly left out of the command line
 # config options for several reasons:
 # 1) Adding new architectures will generally require more code changes
 # 2) Single architecture builds should utilize the normal generated cmake
@@ -134,6 +133,12 @@ def parse_args(conf=DEFAULT_CONFIG):
         default=conf["codesign_identity"],
         dest="codesign_identity")
 
+    parser.add_argument(
+        "--build_config",
+        help="Slippi Dolphin build [netplay, playback]",
+        default=conf["build_config"],
+        dest="build_config")
+
     for arch in ARCHITECTURES:
         parser.add_argument(
              f"--{arch}_cmake_prefix",
@@ -142,14 +147,9 @@ def parse_args(conf=DEFAULT_CONFIG):
              dest=arch+"_cmake_prefix")
 
         parser.add_argument(
-             f"--{arch}_qt5_path",
-             help=f"Install path for {arch} qt5 libraries",
-             default=conf[arch+"_qt5_path"])
-
-        parser.add_argument(
-             f"--{arch}_mac_os_deployment_target",
-             help=f"Deployment architecture for {arch} slice",
-             default=conf[arch+"_mac_os_deployment_target"])
+             f"--{arch}_qt6_path",
+             help=f"Install path for {arch} qt6 libraries",
+             default=conf[arch+"_qt6_path"])
 
     return vars(parser.parse_args())
 
@@ -157,11 +157,12 @@ def parse_args(conf=DEFAULT_CONFIG):
 def lipo(path0, path1, dst):
     if subprocess.call(["lipo", "-create", "-output", dst, path0, path1]) != 0:
         print(f"WARNING: {path0} and {path1} cannot be lipo'd")
-
         shutil.copy(path0, dst)
+    elif subprocess.call(["lipo", dst, "-verify_arch"] + ARCHITECTURES) != 0:
+        raise Exception(f"ERROR: {path0} and {path1} do not cover all architectures: {ARCHITECTURES}")
 
 
-def recursive_merge_binaries(src0, src1, dst):
+def recursive_merge_binaries(src0, src1, dst, seen0: set, seen1: set):
     """
     Merges two build trees together for different architectures into a single
     universal binary.
@@ -202,25 +203,84 @@ def recursive_merge_binaries(src0, src1, dst):
                         "incompatible types. Perhaps the installed libraries" +
                         " are from different versions for each architecture")
 
+    # handle file symlinks in src0 first
     for newpath0 in glob.glob(src0+"/*"):
+        if not os.path.islink(newpath0):
+            continue
+
+        real_path_src0 = os.path.realpath(newpath0)
+        real_path_relative0 = os.path.relpath(real_path_src0, src0)
+        if os.path.isdir(real_path_src0):
+            continue
+
         filename = os.path.basename(newpath0)
         newpath1 = os.path.join(src1, filename)
+        real_path_dst = os.path.join(dst, real_path_relative0)
+        sym_path_dst = os.path.join(dst, filename)
+        if not os.path.exists(newpath1):
+            os.makedirs(os.path.dirname(real_path_dst), 511, True)
+            shutil.copy(real_path_src0, real_path_dst)
+            os.symlink(os.path.relpath(real_path_dst, dst), sym_path_dst)
+            seen0.add(os.path.relpath(real_path_src0, os.getcwd()))
+            continue
+
+        real_path_src1 = os.path.realpath(newpath1)
+        real_path_relative1 = os.path.relpath(real_path_src1, src1)
+        if real_path_relative0 != real_path_relative1:
+            real_basename0 = os.path.basename(real_path_src0)
+            real_basename1 = os.path.basename(real_path_src1)
+            real_path_dst = os.path.join(os.path.dirname(real_path_dst), ARCHITECTURES[0] + real_basename0 + ARCHITECTURES[1] + real_basename1)
+        os.makedirs(os.path.dirname(real_path_dst), 511, True)
+        if filecmp.cmp(real_path_src0, real_path_src1):
+            shutil.copy(real_path_src0, real_path_dst)
+        else:
+            lipo(real_path_src0, real_path_src1, real_path_dst)
+        os.symlink(os.path.relpath(real_path_dst, dst), sym_path_dst)
+        seen0.add(os.path.relpath(real_path_src0, os.getcwd()))
+        seen1.add(os.path.relpath(real_path_src1, os.getcwd()))
+
+    # pick up unique file symlinks in src1
+    for newpath1 in glob.glob(src1+"/*"):
+        if not os.path.islink(newpath1):
+            continue
+
+        real_path_src = os.path.realpath(newpath1)
+        real_path_relative = os.path.relpath(real_path_src, src1)
+        if os.path.isdir(real_path_src):
+            continue
+
+        filename = os.path.basename(newpath1)
+        newpath0 = os.path.join(src0, filename)
+        if os.path.exists(newpath0):
+            continue
+
+        real_path_dst = os.path.join(dst, real_path_relative)
+        sym_path_dst = os.path.join(dst, filename)
+        os.makedirs(os.path.dirname(real_path_dst), 511, True)
+        shutil.copy(real_path_src, real_path_dst)
+        os.symlink(os.path.relpath(real_path_dst, dst), sym_path_dst)
+        seen1.add(os.path.relpath(real_path_src1, os.getcwd()))
+
+    for newpath0 in glob.glob(src0+"/*"):
+        filename = os.path.basename(newpath0)
         new_dst_path = os.path.join(dst, filename)
         if os.path.islink(newpath0):
             # Symlinks will be fixed after files are resolved
             continue
+        if os.path.isfile(newpath0) and newpath0 in seen0:
+            continue
 
+        newpath1 = os.path.join(src1, filename)
         if not os.path.exists(newpath1):
             if os.path.isdir(newpath0):
                 shutil.copytree(newpath0, new_dst_path)
             else:
                 shutil.copy(newpath0, new_dst_path)
-
             continue
 
         if os.path.isdir(newpath1):
-            os.mkdir(new_dst_path)
-            recursive_merge_binaries(newpath0, newpath1, new_dst_path)
+            os.makedirs(new_dst_path, 511, True)
+            recursive_merge_binaries(newpath0, newpath1, new_dst_path, seen0, seen1)
             continue
 
         if filecmp.cmp(newpath0, newpath1):
@@ -231,9 +291,15 @@ def recursive_merge_binaries(src0, src1, dst):
     # Loop over files in src1 and copy missing things over to dst
     for newpath1 in glob.glob(src1+"/*"):
         filename = os.path.basename(newpath1)
-        newpath0 = os.path.join(src0, filename)
         new_dst_path = os.path.join(dst, filename)
-        if (not os.path.exists(newpath0)) and (not os.path.islink(newpath1)):
+        if os.path.islink(newpath1):
+            # Symlinks will be fixed after files are resolved
+            continue
+        if os.path.isfile(newpath1) and newpath1 in seen1:
+          continue
+
+        newpath0 = os.path.join(src0, filename)
+        if not os.path.exists(newpath0):
             if os.path.isdir(newpath1):
                 shutil.copytree(newpath1, new_dst_path)
             else:
@@ -243,7 +309,7 @@ def recursive_merge_binaries(src0, src1, dst):
     for newpath0 in glob.glob(src0+"/*"):
         filename = os.path.basename(newpath0)
         new_dst_path = os.path.join(dst, filename)
-        if os.path.islink(newpath0):
+        if os.path.islink(newpath0) and os.path.isdir(newpath0):
             relative_path = os.path.relpath(os.path.realpath(newpath0), src0)
             os.symlink(relative_path, new_dst_path)
     # Fix up symlinks for path1
@@ -251,7 +317,7 @@ def recursive_merge_binaries(src0, src1, dst):
         filename = os.path.basename(newpath1)
         new_dst_path = os.path.join(dst, filename)
         newpath0 = os.path.join(src0, filename)
-        if os.path.islink(newpath1) and not os.path.exists(newpath0):
+        if os.path.islink(newpath1) and os.path.isdir(newpath1) and not os.path.exists(newpath0):
             relative_path = os.path.relpath(os.path.realpath(newpath1), src1)
             os.symlink(relative_path, new_dst_path)
 
@@ -272,7 +338,7 @@ def build(config):
             os.mkdir(arch)
 
         # Place Qt on the prefix path.
-        prefix_path = config[arch+"_qt5_path"]+';'+config[arch+"_cmake_prefix"]
+        prefix_path = config[arch+"_qt6_path"]+';'+config[arch+"_cmake_prefix"]
 
         env = os.environ.copy()
         env["CMAKE_OSX_ARCHITECTURES"] = arch
@@ -297,8 +363,7 @@ def build(config):
                 "-DCMAKE_PREFIX_PATH="+prefix_path,
                 "-DCMAKE_SYSTEM_PROCESSOR="+arch,
                 "-DCMAKE_IGNORE_PATH="+ignore_path,
-                "-DCMAKE_OSX_DEPLOYMENT_TARGET="
-                + config[arch+"_mac_os_deployment_target"],
+                "-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0.0",
                 "-DMACOS_CODE_SIGNING_IDENTITY="
                 + config["codesign_identity"],
                 '-DMACOS_CODE_SIGNING="ON"',
@@ -312,12 +377,14 @@ def build(config):
                 # iconv, bzip2, and curl
                 "-DUSE_SYSTEM_ICONV=ON",
                 "-DUSE_SYSTEM_BZIP2=ON",
-                "-DUSE_SYSTEM_CURL=ON"
+                "-DUSE_SYSTEM_CURL=ON",
+                "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+                "-DSLIPPI_PLAYBACK=" + ("true" if config["build_config"] == "playback" else "false"),
             ],
             env=env, cwd=arch)
 
         threads = multiprocessing.cpu_count()
-        subprocess.check_call(["cmake", "--build", ".",
+        subprocess.check_call(["cmake", "--build", ".", "--target", "dolphin-emu",
                                "--config", config["build_type"],
                                "--parallel", f"{threads}"], cwd=arch)
 
@@ -333,7 +400,7 @@ def build(config):
     src_app0 = ARCHITECTURES[0]+"/Binaries/"
     src_app1 = ARCHITECTURES[1]+"/Binaries/"
 
-    recursive_merge_binaries(src_app0, src_app1, dst_app)
+    recursive_merge_binaries(src_app0, src_app1, dst_app, set(), set())
 
     if config["autoupdate"]:
         subprocess.check_call([
@@ -341,14 +408,14 @@ def build(config):
             "-t",
             "-e", "preserve",
             config["codesign_identity"],
-            dst_app+"/Dolphin.app/Contents/Helpers/Dolphin Updater.app"])
+            dst_app+"/Slippi_Dolphin.app/Contents/Helpers/Dolphin Updater.app"])
 
     subprocess.check_call([
         "../Tools/mac-codesign.sh",
         "-t",
         "-e", "preserve",
         config["codesign_identity"],
-        dst_app+"/Dolphin.app"])
+        dst_app+"/Slippi_Dolphin.app"])
 
     print("Built Universal Binary successfully!")
 
