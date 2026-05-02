@@ -354,6 +354,9 @@ void ControllerInterface::UpdateInput()
     }
 
     tls_is_updating_devices = false;
+
+    // All needed inputs have been read.
+    g_need_input_for_frame = false;
   }
 
   if (devices_to_remove.size() > 0)
@@ -363,9 +366,6 @@ void ControllerInterface::UpdateInput()
                                  [device](const auto& d) { return d.lock().get() == device; });
     });
   }
-
-  // All needed inputs have been read.
-  g_need_input_for_frame = false;
 }
 
 void ControllerInterface::SetCurrentInputChannel(ciface::InputChannel input_channel)
