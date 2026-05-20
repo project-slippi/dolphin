@@ -45,7 +45,7 @@ public:
   // Singleton. Get an instance of the class here
   //   When SConfig::GetInstance().m_slippiNetworkingOutput is false, this
   //  instance exists and is callable, but does nothing
-  static SlippiSpectateServer& getInstance();
+  static SlippiSpectateServer *getInstance();
 
   // Write the given game payload data to all listening sockets
   void write(u8* payload, u32 length);

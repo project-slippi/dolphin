@@ -159,9 +159,6 @@ CEXISlippi::CEXISlippi(Core::System& system, const std::string current_file_name
       std::make_unique<SlippiDirectCodes>(slprs_exi_device_ptr, SlippiDirectCodes::DIRECT);
   teams_codes = std::make_unique<SlippiDirectCodes>(slprs_exi_device_ptr, SlippiDirectCodes::TEAMS);
 
-  // initialize the spectate server so we can connect without starting a game
-  SlippiSpectateServer::getInstance();
-
   generator = std::default_random_engine(Common::Timer::NowMs());
 
   // Loggers will check 5 bytes, make sure we own that memory
@@ -202,8 +199,6 @@ CEXISlippi::~CEXISlippi()
   {
     m_file_write_thread.join();
   }
-
-  SlippiSpectateServer::getInstance().endGame(true);
 
   // Try to determine whether we were playing an in-progress ranked match, if so
   // indicate to server that this client has abandoned. Anyone trying to modify
@@ -3232,15 +3227,15 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
     writeToFileAsync(&mem_ptr[0], receive_commands_len + 1, "create");
     buf_loc += receive_commands_len + 1;
     g_need_input_for_frame = true;
-    SlippiSpectateServer::getInstance().startGame();
-    SlippiSpectateServer::getInstance().write(&mem_ptr[0], receive_commands_len + 1);
+    SlippiSpectateServer::getInstance()->startGame();
+    SlippiSpectateServer::getInstance()->write(&mem_ptr[0], receive_commands_len + 1);
     slprs_exi_device_reporter_push_replay_data(slprs_exi_device_ptr, &mem_ptr[0],
                                                receive_commands_len + 1);
   }
 
   if (byte == CMD_MENU_FRAME)
   {
-    SlippiSpectateServer::getInstance().write(&mem_ptr[0], _uSize);
+    SlippiSpectateServer::getInstance()->write(&mem_ptr[0], _uSize);
     g_need_input_for_frame = true;
     return;
   }
@@ -3268,8 +3263,8 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
     {
     case CMD_RECEIVE_GAME_END:
       writeToFileAsync(&mem_ptr[buf_loc], payload_len + 1, "close");
-      SlippiSpectateServer::getInstance().write(&mem_ptr[buf_loc], payload_len + 1);
-      SlippiSpectateServer::getInstance().endGame();
+      SlippiSpectateServer::getInstance()->write(&mem_ptr[buf_loc], payload_len + 1);
+      SlippiSpectateServer::getInstance()->endGame();
       slprs_exi_device_reporter_push_replay_data(slprs_exi_device_ptr, &mem_ptr[buf_loc],
                                                  payload_len + 1);
       break;
@@ -3282,7 +3277,7 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
     case CMD_FRAME_BOOKEND:
       g_need_input_for_frame = true;
       writeToFileAsync(&mem_ptr[buf_loc], payload_len + 1, "");
-      SlippiSpectateServer::getInstance().write(&mem_ptr[buf_loc], payload_len + 1);
+      SlippiSpectateServer::getInstance()->write(&mem_ptr[buf_loc], payload_len + 1);
       slprs_exi_device_reporter_push_replay_data(slprs_exi_device_ptr, &mem_ptr[buf_loc],
                                                  payload_len + 1);
       break;
@@ -3417,7 +3412,7 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
     }
     default:
       writeToFileAsync(&mem_ptr[buf_loc], payload_len + 1, "");
-      SlippiSpectateServer::getInstance().write(&mem_ptr[buf_loc], payload_len + 1);
+      SlippiSpectateServer::getInstance()->write(&mem_ptr[buf_loc], payload_len + 1);
       slprs_exi_device_reporter_push_replay_data(slprs_exi_device_ptr, &mem_ptr[buf_loc],
                                                  payload_len + 1);
       break;
