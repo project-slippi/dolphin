@@ -200,6 +200,8 @@ CEXISlippi::~CEXISlippi()
     m_file_write_thread.join();
   }
 
+  SlippiSpectateServer::getInstance().endGame(true);
+
   // Try to determine whether we were playing an in-progress ranked match, if so
   // indicate to server that this client has abandoned. Anyone trying to modify
   // this behavior to game their rating is subject to get banned.

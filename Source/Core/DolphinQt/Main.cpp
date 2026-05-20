@@ -306,7 +306,7 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    // slippi change: Init the spectator server
+    // slippi change: init the spectate server so we can connect without starting a game
     SlippiSpectateServer::getInstance();
 
     if (!Settings::Instance().IsBatchModeEnabled())

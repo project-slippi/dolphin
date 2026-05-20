@@ -19,7 +19,7 @@ inline bool isSpectatorEnabled()
   return Config::Get(Config::SLIPPI_ENABLE_SPECTATOR);
 }
 
-SlippiSpectateServer &SlippiSpectateServer::getInstance()
+SlippiSpectateServer& SlippiSpectateServer::getInstance()
 {
   static SlippiSpectateServer instance;
   return instance;
