@@ -1,8 +1,14 @@
 #!/bin/bash -e
 # linux-env.sh
 
-# Add /usr/lib/ to LD_LIBRARY_PATH cause Ubuntu is dumb
-export LD_LIBRARY_PATH="/usr/lib/:$LD_LIBRARY_PATH"
+appdir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")/..")"
+
+# Prefer libraries and Qt plugins bundled in the AppImage. Relying on
+# distro-provided Qt paths can make the xcb platform plugin undiscoverable.
+export LD_LIBRARY_PATH="${appdir}/usr/lib:/usr/lib/:${LD_LIBRARY_PATH:-}"
+export QT_PLUGIN_PATH="${appdir}/usr/plugins"
+export QT_QPA_PLATFORM_PLUGIN_PATH="${appdir}/usr/plugins/platforms"
+export QML2_IMPORT_PATH="${appdir}/usr/qml"
 
 if [[ $(env | grep -i wayland) ]]; then
     # wxWidgets 3.14 is GTK3, which seemingly has an issue or two when
