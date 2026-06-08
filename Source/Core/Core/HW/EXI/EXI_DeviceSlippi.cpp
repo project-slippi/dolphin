@@ -1193,6 +1193,9 @@ void CEXISlippi::handleOnlineInputs(u8* payload)
       stall_frame_counts[i] = 0;
     }
 
+    last_interval_time_us = 0;
+    perf_debt = 0;
+
     // Reset skip variables
     frames_to_skip = 0;
     is_currently_skipping = false;
@@ -1211,6 +1214,19 @@ void CEXISlippi::handleOnlineInputs(u8* payload)
 
   if (isDisconnected())
   {
+    // Both clients reach this path when a poor-performance termination fires: the initiating
+    // side set the reason locally, the other side received it over the disconnect. Show the
+    // message on both ends rather than only where the debt happened to cross the threshold first.
+    if (slippi_netplay->GetDisconnectReason() ==
+        SlippiNetplayClient::SlippiDisconnectReason::POOR_PERFORMANCE)
+    {
+      OSD::AddTypedMessage(
+          OSD::MessageType::PoorPerformanceTermination,
+          "The match has been terminated due to poor network quality.\nIf you see this message in "
+          "most of your matches, you probably shouldn't be playing ranked.",
+          15000, OSD::Color::RED);
+    }
+
     m_read_queue.push_back(3);  // Indicate we disconnected
     return;
   }
@@ -1226,11 +1242,76 @@ void CEXISlippi::handleOnlineInputs(u8* payload)
   }
   else
   {
+    // Consider disconnecting from a match if performance is poor
+    handlePoorMatchPerformance(frame);
+
     // Send the input for this frame along with everything that has yet to be acked
     handleSendInputs(frame, delay, finalized_frame, finalized_frame_checksum, inputs);
   }
 
   prepareOpponentInputs(frame, should_skip);
+}
+
+void CEXISlippi::handlePoorMatchPerformance(s32 frame)
+{
+  // Only handle poor match performance in ranked. In other modes players can just manually leave.
+  // Plus ranked is mostly where it matters
+  if (last_search.mode != SlippiMatchmaking::OnlinePlayMode::RANKED)
+    return;
+
+  u64 interval_frames = 150;  // Check every 2.5 seconds
+  u64 frame_time_us = 16683;
+
+  // Skip the first 50 frames of the game and check timing info every interval
+  if ((frame + (interval_frames - 50)) % interval_frames != 0)
+    return;
+
+  auto cur_time_us = Common::Timer::NowUs();
+
+  // Iniitalize the first instance
+  if (last_interval_time_us == 0)
+  {
+    last_interval_time_us = cur_time_us;
+    return;  // We will start processing the next time
+  }
+
+  auto expected_time_us = frame_time_us * interval_frames;
+  double ratio = static_cast<double>(cur_time_us - last_interval_time_us) /
+                 static_cast<double>(expected_time_us);
+  last_interval_time_us = cur_time_us;
+
+  // Leaky accumulator: each interval adds "debt" proportional to how far over the expected
+  // duration we ran, and healthy intervals pay it back down. We only terminate once enough debt
+  // builds up, so a single hitch (local or otherwise) is survivable but sustained degradation
+  // isn't. The decay keeps this independent of match length: scattered blips drain away before
+  // they can accumulate to the termination threshold.
+  s32 terminate_threshold = 30;
+  s32 debt;
+  if (ratio >= 1.75)
+    debt = 15;  // Severe
+  else if (ratio >= 1.50)
+    debt = 8;  // Bad
+  else if (ratio >= 1.10)
+    debt = 4;  // Mild
+  else
+    debt = -1;  // Healthy interval, pay down accumulated debt
+
+  perf_debt = std::max(0, perf_debt + debt);
+  INFO_LOG_FMT(SLIPPI_ONLINE, "Modifying performance debt by {}. Currently at: {}/{}", debt,
+               perf_debt, terminate_threshold);
+  if (perf_debt >= terminate_threshold)
+  {
+    // Tell the server about the poor performance, then drop all remote players with a
+    // POOR_PERFORMANCE reason. Flipping the connection to DISCONNECTED lets the existing
+    // disconnect-detection path end the game naturally (next handleOnlineInputs sees
+    // isDisconnected()), same as a real disconnect. The reason rides the disconnect to the
+    // peer so both clients surface the OSD message from the shared disconnect path below.
+    slprs_exi_device_report_match_status(slprs_exi_device_ptr, recent_mm_result.id.c_str(),
+                                         "poor_performance", true);
+    slippi_netplay->ForceDisconnect(SlippiNetplayClient::SlippiDisconnectReason::POOR_PERFORMANCE);
+    ERROR_LOG_FMT(SLIPPI_ONLINE, "Match terminated due to poor performance. {}/{}", perf_debt,
+                  terminate_threshold);
+  }
 }
 
 bool CEXISlippi::shouldSkipOnlineFrame(s32 frame, s32 finalized_frame)
@@ -1421,11 +1502,14 @@ bool CEXISlippi::shouldAdvanceOnlineFrame(s32 frame)
 
     bool is_slow = (offset_us < -t1 && fall_behind_counter > 50) ||
                    (offset_us < -t2 && fall_far_behind_counter > 15);
-    if (is_slow && matchmaking->RemotePlayerCount() == 1)
+    if (is_slow && matchmaking->RemotePlayerCount() == 1 &&
+        last_search.mode != SlippiMatchmaking::OnlinePlayMode::RANKED)
     {
       // Only show this in 1v1. With more peers, CalcTimeOffsetUs returns the min across peers,
       // which biases negative as the peer count grows and false-positives this warning. The
-      // message text ("if this appears with most opponents") also only makes sense in 1v1.
+      // message text ("if this appears with most opponents") also only makes sense in 1v1. Don't
+      // show in ranked because we have the poor match logic running there which has its own
+      // message.
       OSD::AddTypedMessage(
           OSD::MessageType::PerformanceWarning,
           "Possible poor match performance detected.\nIf this message appears with most opponents, "

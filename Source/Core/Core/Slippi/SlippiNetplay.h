@@ -177,6 +177,15 @@ public:
     NET_CONNECT_STATUS_DISCONNECTED,
   };
 
+  // Reason carried over the wire alongside an intentional disconnect, via the ENet
+  // disconnect data field. Values are transmitted as u32; 0 (UNSPECIFIED) is what a
+  // normal/organic disconnect sends, so any non-zero value is a deliberate reason.
+  enum class SlippiDisconnectReason : u32
+  {
+    UNSPECIFIED = 0,
+    POOR_PERFORMANCE = 1,
+  };
+
   bool IsDecider();
   bool IsConnectionSelected();
   u8 LocalPlayerPort();
@@ -194,6 +203,8 @@ public:
   void DropOldRemoteInputs(int32_t finalized_frame);
   std::unordered_map<u8, bool> GetActivePlayerIndices();
   void ForceDisconnectPlayer(u8 playerIdx);
+  void ForceDisconnect(SlippiDisconnectReason reason = SlippiDisconnectReason::UNSPECIFIED);
+  SlippiDisconnectReason GetDisconnectReason();
   SlippiMatchInfo* GetMatchInfo();
   SlippiPlayerSelections GetSlippiRemoteChatMessage(bool is_chat_enabled);
   u8 GetSlippiRemoteSentChatMessage(bool is_chat_enabled);
@@ -286,6 +297,16 @@ protected:
 
   std::atomic<SlippiConnectStatus> slippi_connect_status{
       SlippiConnectStatus::NET_CONNECT_STATUS_UNSET};
+
+  // Disconnect reason plumbing (see SlippiDisconnectReason). m_pending_disconnect_reason is set by
+  // the EXI thread before flipping playerActive and is read by the network thread when it issues
+  // enet_peer_disconnect so the peer learns why. m_disconnect_reason is the resolved reason for
+  // this client — set locally on the initiating side, or from the received disconnect data on the
+  // receiving side — and is read by the EXI thread to drive UI such as the poor-performance OSD.
+  std::atomic<u32> m_pending_disconnect_reason{
+      static_cast<u32>(SlippiDisconnectReason::UNSPECIFIED)};
+  std::atomic<u32> m_disconnect_reason{static_cast<u32>(SlippiDisconnectReason::UNSPECIFIED)};
+
   std::vector<int> failed_connections;
   SlippiMatchInfo match_info;
 
