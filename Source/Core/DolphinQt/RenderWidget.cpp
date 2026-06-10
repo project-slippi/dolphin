@@ -222,12 +222,6 @@ void RenderWidget::HandleCursorTimer()
 void RenderWidget::showFullScreen()
 {
   QWidget::showFullScreen();
-
-  QScreen* screen = window()->windowHandle()->screen();
-
-  const auto dpr = screen->devicePixelRatio();
-
-  emit SizeChanged(width() * dpr, height() * dpr);
 }
 
 // Lock the cursor within the window/widget internal borders, including the aspect ratio if wanted

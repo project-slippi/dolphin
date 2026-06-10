@@ -59,6 +59,10 @@ public:
 
   void UpdateDrawRectangle();
 
+  void SetSurfaceDimensions(int width, int height);
+  int GetSurfaceWidth() const { return m_surface_width; }
+  int GetSurfaceHeight() const { return m_surface_height; }
+
   // Returns the target aspect ratio the XFB output should be drawn with.
   float CalculateDrawAspectRatio(bool allow_stretch = true) const;
 
@@ -132,6 +136,9 @@ private:
   void* m_new_surface_handle = nullptr;
   Common::Flag m_surface_changed;
   Common::Flag m_surface_resized;
+
+  int m_surface_width = 0;
+  int m_surface_height = 0;
 
   // The presentation rectangle.
   // Width and height correspond to the final output resolution.

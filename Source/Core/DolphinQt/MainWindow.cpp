@@ -205,6 +205,31 @@ static WindowSystemInfo GetWindowSystemInfo(QWindow* window)
   wsi.render_surface = wsi.render_window;
 #endif
   wsi.render_surface_scale = window ? static_cast<float>(window->devicePixelRatio()) : 1.0f;
+  if (window)
+  {
+    int w = 0, h = 0;
+    // On Wayland, use the screen size until the compositor has configured the window.
+    if (window->isExposed())
+    {
+      w = static_cast<int>(window->width() * window->devicePixelRatio());
+      h = static_cast<int>(window->height() * window->devicePixelRatio());
+    }
+    if (w < 100 || h < 100)
+    {
+      if (QScreen* screen = window->screen())
+      {
+        w = static_cast<int>(screen->size().width() * screen->devicePixelRatio());
+        h = static_cast<int>(screen->size().height() * screen->devicePixelRatio());
+      }
+      else
+      {
+        w = 1920;
+        h = 1080;
+      }
+    }
+    wsi.render_surface_width = static_cast<u32>(std::max(w, 1));
+    wsi.render_surface_height = static_cast<u32>(std::max(h, 1));
+  }
 
   return wsi;
 }
@@ -1165,6 +1190,9 @@ void MainWindow::StartGame(std::unique_ptr<BootParameters>&& parameters)
 
   // We need the render widget before booting.
   ShowRenderWidget();
+
+  // Process pending events so the compositor configures the window before we query its size.
+  QApplication::processEvents();
 
   // Boot up, show an error if it fails to load the game.
   if (!BootManager::BootCore(m_system, std::move(parameters),

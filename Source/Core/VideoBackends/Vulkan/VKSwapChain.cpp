@@ -21,6 +21,9 @@
 #if defined(VK_USE_PLATFORM_XLIB_KHR)
 #include <X11/Xlib.h>
 #endif
+#if defined(VK_USE_PLATFORM_WAYLAND_KHR)
+#include <wayland-client.h>
+#endif
 
 namespace Vulkan
 {
@@ -119,6 +122,29 @@ VkSurfaceKHR SwapChain::CreateVulkanSurface(VkInstance instance, const WindowSys
     if (res != VK_SUCCESS)
     {
       LOG_VULKAN_ERROR(res, "vkCreateMetalSurfaceEXT failed: ");
+      return VK_NULL_HANDLE;
+    }
+
+    return surface;
+  }
+#endif
+
+#if defined(VK_USE_PLATFORM_WAYLAND_KHR)
+  if (wsi.type == WindowSystemType::Wayland)
+  {
+    VkWaylandSurfaceCreateInfoKHR surface_create_info = {
+        VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,  // VkStructureType                  sType
+        nullptr,                                            // const void*                      pNext
+        0,                                                  // VkWaylandSurfaceCreateFlagsKHR   flags
+        static_cast<wl_display*>(wsi.display_connection),   // struct wl_display*               display
+        static_cast<wl_surface*>(wsi.render_surface)        // struct wl_surface*               surface
+    };
+
+    VkSurfaceKHR surface;
+    VkResult res = vkCreateWaylandSurfaceKHR(instance, &surface_create_info, nullptr, &surface);
+    if (res != VK_SUCCESS)
+    {
+      LOG_VULKAN_ERROR(res, "vkCreateWaylandSurfaceKHR failed: ");
       return VK_NULL_HANDLE;
     }
 
@@ -295,13 +321,21 @@ bool SwapChain::CreateSwapChain()
   if (surface_capabilities.maxImageCount > 0)
     image_count = std::min(image_count, surface_capabilities.maxImageCount);
 
-  // Determine the dimensions of the swap chain. Values of -1 indicate the size we specify here
-  // determines window size?
+  // Determine the dimensions of the swap chain. UINT32_MAX means the surface size is
+  // determined by the swap chain extent (common on Wayland compositors).
   VkExtent2D size = surface_capabilities.currentExtent;
   if (size.width == UINT32_MAX)
   {
-    size.width = std::max(g_presenter->GetBackbufferWidth(), 1);
-    size.height = std::max(g_presenter->GetBackbufferHeight(), 1);
+    if (g_presenter && g_presenter->GetSurfaceWidth() > 0 && g_presenter->GetSurfaceHeight() > 0)
+    {
+      size.width = g_presenter->GetSurfaceWidth();
+      size.height = g_presenter->GetSurfaceHeight();
+    }
+    else
+    {
+      size.width = std::max(m_wsi.render_surface_width, 1u);
+      size.height = std::max(m_wsi.render_surface_height, 1u);
+    }
   }
   size.width = std::clamp(size.width, surface_capabilities.minImageExtent.width,
                           surface_capabilities.maxImageExtent.width);

@@ -55,6 +55,13 @@ if (ANDROID AND _M_ARM_64)
   )
 endif()
 
+if (ENABLE_WAYLAND AND WAYLAND_FOUND)
+  target_link_libraries(videovulkan
+  PRIVATE
+      PkgConfig::WAYLAND
+  )
+endif()
+
 # Only include the Vulkan headers when building the Vulkan backend
 target_include_directories(videovulkan
 PRIVATE

@@ -43,4 +43,9 @@ struct WindowSystemInfo
 
   // Scale of the render surface. For hidpi systems, this will be >1.
   float render_surface_scale = 1.0f;
+
+  // Dimensions of the render surface. Used on Wayland where the compositor expects
+  // the application to decide the swap chain size.
+  unsigned int render_surface_width = 0;
+  unsigned int render_surface_height = 0;
 };

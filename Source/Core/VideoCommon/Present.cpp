@@ -526,6 +526,14 @@ void Presenter::ResizeSurface()
   m_surface_resized.Set();
 }
 
+void Presenter::SetSurfaceDimensions(int width, int height)
+{
+  std::lock_guard<std::mutex> lock(m_swap_mutex);
+  m_surface_width = width;
+  m_surface_height = height;
+  m_surface_resized.Set();
+}
+
 void* Presenter::GetNewSurfaceHandle()
 {
   void* handle = m_new_surface_handle;
