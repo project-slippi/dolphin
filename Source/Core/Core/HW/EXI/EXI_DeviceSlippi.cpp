@@ -146,7 +146,6 @@ CEXISlippi::CEXISlippi(Core::System& system, const std::string current_file_name
   slprs_exi_config.iso_path = current_file_name.c_str();
   slprs_exi_config.user_config_folder = user_config_folder.c_str();
   slprs_exi_config.scm_slippi_semver_str = Common::GetSemVerStr().c_str();
-  slprs_exi_config.playback_comm_file_path = SConfig::GetSlippiConfig().slippi_input.c_str();
   slprs_exi_config.osd_add_msg_fn = OSDMessageHandler;
 
   slprs_exi_device_ptr = slprs_exi_device_create(slprs_exi_config);
