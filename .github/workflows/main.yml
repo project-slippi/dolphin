@@ -215,6 +215,7 @@ jobs:
           libpng-dev \
           qt6-base-private-dev \
           libqt6svg6-dev \
+          qt6-xdgdesktopportal-platformtheme \
           libxxf86vm-dev \
           x11proto-xinerama-dev \
           libfuse2

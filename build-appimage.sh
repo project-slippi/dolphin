@@ -8,7 +8,7 @@ LINUXDEPLOY_PATH="https://github.com/linuxdeploy/linuxdeploy/releases/download/c
 LINUXDEPLOY_FILE="linuxdeploy-x86_64.AppImage"
 LINUXDEPLOY_URL="${LINUXDEPLOY_PATH}/${LINUXDEPLOY_FILE}"
 
-LINUXDEPLOY_QT_PLUGIN_PATH="https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20240109-1"
+LINUXDEPLOY_QT_PLUGIN_PATH="https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous"
 LINUXDEPLOY_QT_PLUGIN_FILE="linuxdeploy-plugin-qt-x86_64.AppImage"
 LINUXDEPLOY_QT_PLUGIN_URL="${LINUXDEPLOY_QT_PLUGIN_PATH}/${LINUXDEPLOY_QT_PLUGIN_FILE}"
 
