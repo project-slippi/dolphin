@@ -235,7 +235,7 @@ static std::string GetTimeForFrame(s32 currFrame)
   int currMinutes = (int)(currSeconds / 60);
   int currRemainder = (int)(currSeconds % 60);
   // Position string (i.e. MM:SS)
-  char currTime[6];
+  char currTime[16];  // appease compiler format-overflow warning
   sprintf(currTime, "%02d:%02d", currMinutes, currRemainder);
   return std::string(currTime);
 }
@@ -279,8 +279,8 @@ bool ButtonCustom(const char* label, const ImVec2& size_arg,
   if (!ImGui::ItemAdd(bb, id))
     return false;
 
-  if (g.CurrentItemFlags & ImGuiItemFlags_ButtonRepeat)
-    flags |= ImGuiButtonFlags_Repeat;
+  //if (g.CurrentItemFlags & ImGuiItemFlags_ButtonRepeat)
+  //  flags |= ImGuiButtonFlags_Repeat;
   bool hovered, held;
   bool pressed = ImGui::ButtonBehavior(bb, id, &hovered, &held, flags);
   if (pressed)
@@ -347,7 +347,7 @@ bool SeekBarBehavior(const ImRect& bb, ImGuiID id, int* v, int v_min, int v_max,
   auto hover_bb = ImRect(ImVec2(width * 0.0025f, height - scaled_height * 0.0475f),
                          ImVec2(width * 0.9975f, bb.Min.y));
 
-  const bool hovered = ImGui::ItemHoverable(hover_bb, id);
+  const bool hovered = ImGui::ItemHoverable(hover_bb, id, ImGuiItemFlags_None);
 
   if (!isHeld && isActive)
   {
@@ -510,7 +510,7 @@ bool VolumeBarBehavior(const ImRect& bb, ImGuiID id, int* v, int v_min, int v_ma
   }
 
   const bool isDown = g.IO.MouseDown[0];
-  const bool hovered = ImGui::ItemHoverable(bb, id);
+  const bool hovered = ImGui::ItemHoverable(bb, id, ImGuiItemFlags_None);
   static bool isHeld = false;
   bool value_changed = false;
   bool isActive = g.ActiveId == id;

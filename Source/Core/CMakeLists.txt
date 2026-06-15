@@ -32,13 +32,12 @@ if (WIN32 AND ENABLE_AUTOUPDATE)
 endif()
 
 # slippi change: Build SlippiRustExtensions for DolphinQt and DolphinNoGui
-#
-#set(RUST_FEATURES "")
-#if(DIS_PLAYBACK)
-#    set(RUST_FEATURES "playback")
-#endif()
+set(RUST_FEATURES "mainline")
+if(SLIPPI_PLAYBACK)
+    set(RUST_FEATURES "mainline,playback")
+endif()
 
-corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Externals/SlippiRustExtensions/Cargo.toml ${RUST_FEATURES})
+corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Externals/SlippiRustExtensions/Cargo.toml NO_DEFAULT_FEATURES FEATURES ${RUST_FEATURES})
 # slippi change: end
 
 if (APPLE AND ENABLE_QT)

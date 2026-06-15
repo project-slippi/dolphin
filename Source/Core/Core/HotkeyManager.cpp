@@ -16,6 +16,9 @@
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
 
+#include "Core/Config/MainSettings.h"
+#include "Core/ConfigManager.h"
+
 #include "InputCommon/ControllerEmu/Control/Input.h"
 #include "InputCommon/ControllerEmu/ControlGroup/Buttons.h"
 #include "InputCommon/ControllerEmu/ControlGroup/ControlGroup.h"
