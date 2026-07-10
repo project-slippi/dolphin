@@ -38,7 +38,12 @@ endif()
 #    set(RUST_FEATURES "playback")
 #endif()
 
-corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Externals/SlippiRustExtensions/Cargo.toml ${RUST_FEATURES})
+if(NOT EMSCRIPTEN)
+  corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Externals/SlippiRustExtensions/Cargo.toml ${RUST_FEATURES})
+else()
+  # Web Phase 0: the Rust workspace is not yet cross-compiled for
+  # wasm32-unknown-emscripten; Common/SlippiRustStubs.c satisfies the linker.
+endif()
 # slippi change: end
 
 if (APPLE AND ENABLE_QT)

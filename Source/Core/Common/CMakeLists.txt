@@ -180,7 +180,6 @@ PUBLIC
   MbedTLS::mbedtls
   minizip::minizip
   sfml-network
-  slippi_rust_extensions
 
 PRIVATE
   CURL::libcurl
@@ -189,6 +188,15 @@ PRIVATE
   spng::spng
   ${VTUNE_LIBRARIES}
 )
+
+# slippi change: on Emscripten the Rust workspace isn't built yet (Phase 0);
+# a C stub provides the slprs_* symbols instead.
+if(EMSCRIPTEN)
+  target_sources(common PRIVATE SlippiRustStubs.c)
+else()
+  target_link_libraries(common PUBLIC slippi_rust_extensions)
+endif()
+# end slippi change
 
 if ((DEFINED CMAKE_ANDROID_ARCH_ABI AND CMAKE_ANDROID_ARCH_ABI MATCHES "x86|x86_64") OR
     (NOT DEFINED CMAKE_ANDROID_ARCH_ABI AND _M_X86_64))
@@ -239,6 +247,11 @@ elseif(APPLE)
   target_sources(common PRIVATE
     Logging/ConsoleListenerNix.cpp
     MemArenaDarwin.cpp
+  )
+elseif(EMSCRIPTEN)
+  target_sources(common PRIVATE
+    Logging/ConsoleListenerNix.cpp
+    MemArenaEmscripten.cpp
   )
 else()
   target_sources(common PRIVATE

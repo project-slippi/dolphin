@@ -131,6 +131,11 @@ private:
 
   vm_address_t m_region_address = 0;
   vm_size_t m_region_size = 0;
+#elif defined(__EMSCRIPTEN__)
+  // wasm32: one flat linear memory, no shm/aliasing/page protection.
+  // The arena is a single heap allocation; views are pointers into it.
+  u8* m_backing = nullptr;
+  std::size_t m_backing_size = 0;
 #else
   int m_shm_fd = 0;
   void* m_reserved_region = nullptr;
