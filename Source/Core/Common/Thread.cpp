@@ -19,6 +19,8 @@
 #include <sched.h>
 #elif defined __HAIKU__
 #include <OS.h>
+#elif defined __EMSCRIPTEN__
+#include <emscripten/threading.h>
 #endif
 
 #ifdef USE_VTUNE
@@ -175,6 +177,8 @@ void SetCurrentThreadName(const char* name)
   pthread_setname_np(pthread_self(), "%s", const_cast<char*>(name));
 #elif defined __HAIKU__
   rename_thread(find_thread(nullptr), name);
+#elif defined __EMSCRIPTEN__
+  emscripten_set_thread_name(pthread_self(), name);
 #else
   // linux doesn't allow to set more than 16 bytes, including \0.
   pthread_setname_np(pthread_self(), std::string(name).substr(0, 15).c_str());

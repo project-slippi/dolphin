@@ -689,8 +689,6 @@ PUBLIC
   RangeSet::RangeSet
   sfml-network
   videonull
-  videoogl
-  videosoftware
   semver
   vcdcom
   vcddec
@@ -703,6 +701,11 @@ PRIVATE
   LZ4::LZ4
   ZLIB::ZLIB
 )
+
+# slippi change: OGL/Software backends are not built on Emscripten
+if(NOT EMSCRIPTEN)
+  target_link_libraries(core PUBLIC videoogl videosoftware)
+endif()
 
 if(LIBUDEV_FOUND)
   target_include_directories(core PRIVATE ${LIBUDEV_INCLUDE_DIR})

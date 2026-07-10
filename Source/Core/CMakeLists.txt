@@ -11,6 +11,11 @@ if(ENABLE_NOGUI)
   add_subdirectory(DolphinNoGUI)
 endif()
 
+# slippi change: browser frontend (also builds natively as the determinism twin)
+if(EMSCRIPTEN OR ENABLE_HEADLESS_SMOKE)
+  add_subdirectory(DolphinWeb)
+endif()
+
 if(ENABLE_CLI_TOOL)
   add_subdirectory(DolphinTool)
 endif()
