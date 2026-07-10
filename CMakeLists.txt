@@ -75,6 +75,25 @@ else()
   endif()
 endif()
 
+# slippi change: browser (Emscripten/WebAssembly) platform gate.
+# Everything web-specific in the tree is guarded by EMSCRIPTEN (CMake) or
+# __EMSCRIPTEN__ (C++). See docs/superpowers/specs/2026-07-09-wasm-webgpu-port-design.md
+if(EMSCRIPTEN)
+  set(ENABLE_GENERIC ON CACHE BOOL "" FORCE)   # no JIT arch; CachedInterpreter
+  foreach(_off
+      ENABLE_QT ENABLE_NOGUI ENABLE_CLI_TOOL ENABLE_TESTS
+      ENABLE_VULKAN ENABLE_SDL ENABLE_EGL ENABLE_X11
+      ENABLE_ALSA ENABLE_PULSEAUDIO ENABLE_CUBEB ENABLE_LLVM
+      ENABLE_EVDEV ENABLE_HWDB ENABLE_AUTOUPDATE ENABLE_ANALYTICS
+      USE_DISCORD_PRESENCE USE_UPNP USE_MGBA USE_RETRO_ACHIEVEMENTS
+      ENCODE_FRAMEDUMPS)
+    set(${_off} OFF CACHE BOOL "" FORCE)
+  endforeach()
+  add_compile_options(-pthread -fwasm-exceptions)
+  add_link_options(-pthread -fwasm-exceptions)
+endif()
+# end slippi change
+
 # Name of the Dolphin distributor. If you redistribute Dolphin builds (forks,
 # unofficial builds) please consider identifying your distribution with a
 # unique name here.
