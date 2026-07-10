@@ -66,8 +66,12 @@ bool BootCore(Core::System& system, std::unique_ptr<BootParameters> boot,
   if (!StartUp.SetPathsAndGameMetadata(system, *boot))
     return false;
 
-  // Block running anything other than Melee and homebrew
-  if (!StartUp.GetGameID().empty() && StartUp.LoadDefaultGameIni().GetSections().empty())
+  // Block running anything other than Melee and homebrew. Homebrew
+  // executables (.dol/.elf) get a synthetic "ID-<filename>" game ID (see
+  // SConfig::MakeGameID), which never has a GameSettings INI — exempt them,
+  // as the check otherwise rejects all homebrew contrary to its intent.
+  if (!StartUp.GetGameID().empty() && !StartUp.GetGameID().starts_with("ID-") &&
+      StartUp.LoadDefaultGameIni().GetSections().empty())
   {
     PanicAlertFmtT("This does not seem to be a copy of Super Smash Bros. Melee. "
       "Please use regular Dolphin (https://dolphin-emu.org/) for running "

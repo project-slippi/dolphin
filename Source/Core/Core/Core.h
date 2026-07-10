@@ -29,6 +29,11 @@ void SetIsThrottlerTempDisabled(bool disable);
 
 void Callback_NewField(Core::System& system);
 
+// Invoked on the CPU thread at every VI field with a running field count,
+// giving a deterministic emulated-time hook independent of the video backend.
+// Used by headless harnesses; pass nullptr to clear.
+void SetOnFieldCallback(std::function<void(Core::System& system, u64 field_count)> callback);
+
 enum class State
 {
   Uninitialized,

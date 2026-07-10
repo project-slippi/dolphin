@@ -538,7 +538,11 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
   AudioCommon::InitSoundStream(system);
   Common::ScopeGuard audio_guard([&system] { AudioCommon::ShutdownSoundStream(system); });
 
-  std::string current_file_name = std::get<BootParameters::Disc>(boot->parameters).path;
+  // Not all boot types are discs (homebrew .dol/.elf); std::get would throw
+  // bad_variant_access (-> abort under -fno-exceptions) for those.
+  std::string current_file_name;
+  if (const auto* disc = std::get_if<BootParameters::Disc>(&boot->parameters))
+    current_file_name = disc->path;
   HW::Init(system,
            NetPlay::IsNetPlayRunning() ? &(boot_session_data.GetNetplaySettings()->sram) : nullptr, current_file_name);
 
@@ -875,8 +879,20 @@ void Callback_FramePresented(const PresentInfo& present_info)
 }
 
 // Called from VideoInterface::Update (CPU thread) at emulated field boundaries
+static std::function<void(Core::System&, u64)> s_on_field_callback;
+static u64 s_field_count = 0;
+
+void SetOnFieldCallback(std::function<void(Core::System& system, u64 field_count)> callback)
+{
+  s_on_field_callback = std::move(callback);
+  s_field_count = 0;
+}
+
 void Callback_NewField(Core::System& system)
 {
+  if (s_on_field_callback)
+    s_on_field_callback(system, ++s_field_count);
+
   if (s_frame_step)
   {
     // To ensure that s_stop_frame_step is up to date, wait for the GPU thread queue to empty,
