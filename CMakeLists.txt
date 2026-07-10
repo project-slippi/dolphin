@@ -89,8 +89,10 @@ if(EMSCRIPTEN)
       ENCODE_FRAMEDUMPS)
     set(${_off} OFF CACHE BOOL "" FORCE)
   endforeach()
-  add_compile_options(-pthread -fwasm-exceptions)
-  add_link_options(-pthread -fwasm-exceptions)
+  # SUPPORT_LONGJMP=wasm: C code using setjmp/longjmp (curl, …) is incompatible
+  # with -fwasm-exceptions under the default JS-based emscripten sjlj.
+  add_compile_options(-pthread -fwasm-exceptions -sSUPPORT_LONGJMP=wasm)
+  add_link_options(-pthread -fwasm-exceptions -sSUPPORT_LONGJMP=wasm)
 endif()
 # end slippi change
 
@@ -646,8 +648,10 @@ if(ENABLE_ANALYTICS)
 endif()
 
 # slippi change
+if(NOT EMSCRIPTEN)
 message("Using static Corrosion from Externals for Rust linking support")
 add_subdirectory(Externals/corrosion)
+endif()
 # Copy Rust DLLs
 if (WIN32)
   # this custom target will always run during a build and thus copy the rust DLLs to the binary folder if you're making rust only changes
@@ -735,8 +739,9 @@ if(ENABLE_VULKAN)
   endif()
 endif()
 
-if(NOT WIN32 OR (NOT (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")))
-  # OpenGL is available on all platforms except windows-arm64
+if(NOT EMSCRIPTEN AND (NOT WIN32 OR (NOT (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64"))))
+  # OpenGL is available on all platforms except windows-arm64.
+  # slippi change: not on Emscripten either (WebGPU backend comes in a later phase).
   add_definitions(-DHAS_OPENGL)
 endif()
 

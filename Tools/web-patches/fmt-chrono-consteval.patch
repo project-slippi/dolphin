@@ -1,0 +1,16 @@
+diff --git a/include/fmt/chrono.h b/include/fmt/chrono.h
+index 9d54574e..9a12b41f 100644
+--- a/include/fmt/chrono.h
++++ b/include/fmt/chrono.h
+@@ -1156,7 +1156,10 @@ void write_floating_seconds(memory_buffer& buf, Duration duration,
+       num_fractional_digits = 6;
+   }
+ 
+-  fmt::format_to(std::back_inserter(buf), FMT_STRING("{:.{}f}"),
++  // slippi change: FMT_STRING's compile-string lambda fails consteval checking
++  // under clang 21 (Emscripten); the plain literal takes the normal consteval
++  // format-string path and compiles everywhere.
++  fmt::format_to(std::back_inserter(buf), "{:.{}f}",
+                  std::fmod(val * static_cast<rep>(Duration::period::num) /
+                                static_cast<rep>(Duration::period::den),
+                            static_cast<rep>(60)),

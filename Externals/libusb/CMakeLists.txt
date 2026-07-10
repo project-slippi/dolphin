@@ -51,6 +51,11 @@ elseif(APPLE)
 #    )
 #    find_library(LOG_LIBRARY log)
 #    target_link_libraries(usb PRIVATE ${LOG_LIBRARY})
+elseif(EMSCRIPTEN)
+    # slippi change: no USB in the browser (a WebUSB shim for the GC adapter is
+    # a later phase). The null backend keeps consumers (hidapi, GCAdapter,
+    # IOS USB) compiling; it simply enumerates no devices at runtime.
+    target_sources(usb PRIVATE libusb/libusb/os/null_usb.c)
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     target_sources(usb PRIVATE libusb/libusb/os/linux_usbfs.c)
     find_package(LIBUDEV)

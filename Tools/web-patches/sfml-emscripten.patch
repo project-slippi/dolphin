@@ -1,0 +1,17 @@
+diff --git a/include/SFML/Config.hpp b/include/SFML/Config.hpp
+index 66020ee3..78858c5f 100644
+--- a/include/SFML/Config.hpp
++++ b/include/SFML/Config.hpp
+@@ -81,6 +81,12 @@
+ // Linux
+ #define SFML_SYSTEM_LINUX
+ 
++#elif defined(__EMSCRIPTEN__)
++
++// slippi change: Emscripten/WebAssembly — musl-based libc, close enough to
++// Linux for the System/Network modules Dolphin uses.
++#define SFML_SYSTEM_LINUX
++
+ #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+ 
+ // FreeBSD

@@ -2,6 +2,12 @@ set(ZLIB_ENABLE_TESTS OFF)
 set(ZLIB_COMPAT ON)
 set(SKIP_INSTALL_ALL ON)
 
+# slippi change: the Emscripten toolchain reports CMAKE_SYSTEM_PROCESSOR=x86,
+# which makes zlib-ng compile x86 intrinsics that cannot build for wasm32.
+if(EMSCRIPTEN)
+  set(WITH_OPTIM OFF)
+endif()
+
 option(BUILD_SHARED_LIBS "Build shared library" OFF)
 
 add_subdirectory(zlib-ng)
