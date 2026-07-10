@@ -32,6 +32,10 @@ constexpr u32 m_os = OS_ALL | OS_ANDROID;
 constexpr u32 m_os = OS_ALL | OS_OSX;
 #elif __linux__
 constexpr u32 m_os = OS_ALL | OS_LINUX;
+#elif __EMSCRIPTEN__
+// slippi change: browser GPU drivers are mediated by WebGPU; no meaningful
+// native driver detection. Treat as generic.
+constexpr u32 m_os = OS_ALL;
 #elif __FreeBSD__
 constexpr u32 m_os = OS_ALL | OS_FREEBSD;
 #elif __OpenBSD__

@@ -170,7 +170,12 @@ SlippiSpectateServer::SlippiSpectateServer()
 
     // Spawn thread for socket listener
     m_stop_socket_thread = false;
+#ifndef __EMSCRIPTEN__
+    // No server sockets in the browser: binding the ENet host would fail at
+    // runtime, and spectating a web client goes through a different transport
+    // in a later phase.
     m_socketThread = std::thread(&SlippiSpectateServer::SlippicommSocketThread, this);
+#endif
   }
 }
 

@@ -12,6 +12,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <sys/select.h>
 #include <sys/stat.h>
 #include <vector>
 

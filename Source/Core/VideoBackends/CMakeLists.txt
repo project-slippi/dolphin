@@ -1,6 +1,10 @@
-add_subdirectory(OGL)
+# slippi change: no OpenGL on Emscripten (WebGPU backend comes in a later phase);
+# the Software backend presents through OGL, so it stays desktop-only too.
+if(NOT EMSCRIPTEN)
+  add_subdirectory(OGL)
+  add_subdirectory(Software)
+endif()
 add_subdirectory(Null)
-add_subdirectory(Software)
 
 if(WIN32)
   add_subdirectory(D3DCommon)
