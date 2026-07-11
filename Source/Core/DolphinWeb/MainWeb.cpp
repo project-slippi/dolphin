@@ -221,7 +221,14 @@ int main(int argc, char* argv[])
   std::fflush(stdout);
   const int exit_code = alerts == 0 ? 0 : 2;
 #ifdef __EMSCRIPTEN__
-  // Pool pthreads keep the runtime alive after main returns; exit explicitly.
+  // The pthread pool (PTHREAD_POOL_SIZE=16) keeps Node's event loop alive
+  // after main() returns, and emscripten_force_exit alone does not reliably
+  // tear that down from a PROXY_TO_PTHREAD-proxied main (observed hanging
+  // past a 20-minute timeout under node despite a clean run). Force it via
+  // Node's own process.exit when available; force_exit still runs first for
+  // the browser case, where there is no process object to exit.
+  EM_ASM({ if (typeof process !== 'undefined' && process.exit) process.exit($0); },
+         exit_code);
   emscripten_force_exit(exit_code);
 #endif
   return exit_code;
