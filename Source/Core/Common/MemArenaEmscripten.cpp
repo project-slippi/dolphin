@@ -26,14 +26,30 @@ MemArena::~MemArena()
   ReleaseSHMSegment();
 }
 
+namespace
+{
+// Native backends hand out mmap/VirtualAlloc memory, which is always
+// page-aligned; SIMD paths and (later) JIT-emitted code assume that guarantee
+// holds for guest RAM too. Plain calloc only promises malloc alignment
+// (8-16 bytes), so match the other backends explicitly instead of relying on
+// the allocator's default.
+constexpr size_t ARENA_PAGE_SIZE = 4096;
+size_t RoundUpToPage(size_t size)
+{
+  return (size + ARENA_PAGE_SIZE - 1) & ~(ARENA_PAGE_SIZE - 1);
+}
+}  // namespace
+
 void MemArena::GrabSHMSegment(size_t size, std::string_view base_name)
 {
-  m_backing = static_cast<u8*>(std::calloc(1, size));
+  const size_t aligned_size = RoundUpToPage(size);
+  m_backing = static_cast<u8*>(std::aligned_alloc(ARENA_PAGE_SIZE, aligned_size));
   if (!m_backing)
   {
     ERROR_LOG_FMT(MEMMAP, "MemArenaEmscripten: failed to allocate {} bytes", size);
     return;
   }
+  std::memset(m_backing, 0, aligned_size);
   m_backing_size = size;
 }
 

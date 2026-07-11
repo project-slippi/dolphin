@@ -1,10 +1,14 @@
 // Copyright 2026 Dolphin Emulator Project / Slippi
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-// Phase-0 headless browser entry point: boot a game from the Emscripten FS,
-// frame-step N frames deterministically, hash MEM1, exit. Runs identically as
-// a native binary (dolphin-headless-smoke) so native and wasm runs can be
-// diffed. Grows into the embind frontend in Phase 3.
+// Phase-0 headless determinism/smoke harness: boot a game, run N VI fields
+// unthrottled, hash MEM1, exit. Runs identically as a native binary
+// (dolphin-headless-smoke) so native and wasm runs can be diffed. This is a
+// throwaway CLI test tool, not the Phase 3 browser app: it blocks main() on
+// sleep_for and calls emscripten_force_exit, neither of which an embind
+// frontend embedded in a live page can do (it must never block the JS event
+// loop, and it must outlive a single "run"). The Phase 3 app is a separate
+// embind-driven target with an async main loop.
 
 #include <atomic>
 #include <chrono>
@@ -13,9 +17,14 @@
 #include <string>
 #include <thread>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
+#include <xxhash.h>
+
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
-#include "Common/Hash.h"
 #include "Common/Logging/LogManager.h"
 #include "Common/MsgHandler.h"
 #include "Common/WindowSystemInfo.h"
@@ -55,6 +64,12 @@ int main(int argc, char* argv[])
   std::string user_dir;  // must be passed for isolated native runs
 #endif
   int frames = 600;
+  // Raw MEM1 dump at the final checkpoint, for offline byte-diffing. Under
+  // wasm this path is resolved by Emscripten's virtual FS: bare paths land in
+  // MEMFS and vanish when the process exits, so callers debugging the wasm
+  // leg must pass a path under pre.js's NODEFS mount (/host/<absolute host
+  // path>) to persist it to the real filesystem.
+  static std::string dump_path;
   for (int i = 1; i < argc; i++)
   {
     if (std::strcmp(argv[i], "--exec") == 0 && i + 1 < argc)
@@ -63,6 +78,8 @@ int main(int argc, char* argv[])
       frames = std::atoi(argv[++i]);
     else if (std::strcmp(argv[i], "--user") == 0 && i + 1 < argc)
       user_dir = argv[++i];
+    else if (std::strcmp(argv[i], "--dump") == 0 && i + 1 < argc)
+      dump_path = argv[++i];
   }
   if (path.empty())
   {
@@ -83,10 +100,15 @@ int main(int argc, char* argv[])
       log_manager->SetEnable(static_cast<Common::Log::LogType>(i), true);
   }
   Common::SetEnableAlert(true);
+  static std::atomic<int> s_alert_count{0};
   Common::RegisterMsgAlertHandler([](const char* caption, const char* text, bool yes_no,
                                      Common::MsgType style) {
     std::fprintf(stderr, "ALERT [%s]: %s\n", caption, text);
-    return true;  // headless: auto-confirm
+#ifdef __EMSCRIPTEN__
+    emscripten_log(EM_LOG_ERROR | EM_LOG_C_STACK, "alert backtrace");
+#endif
+    s_alert_count.fetch_add(1);
+    return true;  // headless: auto-confirm, but counted — any alert fails the run
   });
 
   // Deterministic headless configuration, identical for native and wasm runs.
@@ -123,11 +145,30 @@ int main(int argc, char* argv[])
   static std::atomic<u64> s_mem1_hash{0};
   const u64 target_fields = static_cast<u64>(frames);
   Core::SetOnFieldCallback([target_fields](Core::System& sys, u64 field_count) {
-    if (field_count == target_fields)
+    // Checkpoint hashes localize where two runs first diverge without rerunning.
+    if (field_count == 1 || field_count % 60 == 0 || field_count == target_fields)
     {
       auto& mem = sys.GetMemory();
-      s_mem1_hash.store(Common::GetHash64(mem.GetRAM(), mem.GetRamSizeReal(), 0));
-      s_hash_done.store(true);
+      // XXH64 directly: Common::GetHash64 picks different algorithms per
+      // architecture, so identical RAM hashes differently native vs wasm.
+      const u64 hash = XXH64(mem.GetRAM(), mem.GetRamSizeReal(), 0);
+      std::printf("SLIPPI_WEB_MEM1_HASH_FIELD_%llu=%016llx\n",
+                  static_cast<unsigned long long>(field_count),
+                  static_cast<unsigned long long>(hash));
+      std::fflush(stdout);
+      if (field_count == target_fields)
+      {
+        if (!dump_path.empty())
+        {
+          if (std::FILE* f = std::fopen(dump_path.c_str(), "wb"))
+          {
+            std::fwrite(mem.GetRAM(), 1, mem.GetRamSizeReal(), f);
+            std::fclose(f);
+          }
+        }
+        s_mem1_hash.store(hash);
+        s_hash_done.store(true);
+      }
     }
   });
 
@@ -163,7 +204,6 @@ int main(int argc, char* argv[])
     Core::HostDispatchJobs(system);
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
-  Core::SetOnFieldCallback(nullptr);
 
   std::printf("SLIPPI_WEB_MEM1_HASH=%016llx\n",
               static_cast<unsigned long long>(s_mem1_hash.load()));
@@ -171,7 +211,18 @@ int main(int argc, char* argv[])
 
   Core::Stop(system);
   Core::Shutdown(system);
+  // Only now is the CPU thread gone; clearing earlier races with its callback.
+  Core::SetOnFieldCallback(nullptr);
   UICommon::ShutdownControllers();
   UICommon::Shutdown();
-  return 0;
+
+  const int alerts = s_alert_count.load();
+  std::printf("SLIPPI_WEB_ALERTS=%d\n", alerts);
+  std::fflush(stdout);
+  const int exit_code = alerts == 0 ? 0 : 2;
+#ifdef __EMSCRIPTEN__
+  // Pool pthreads keep the runtime alive after main returns; exit explicitly.
+  emscripten_force_exit(exit_code);
+#endif
+  return exit_code;
 }

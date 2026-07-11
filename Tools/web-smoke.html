@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- Headless-Chromium smoke page: fetches the test game into MEMFS, runs the
+     dolphin-web harness, and POSTs every SLIPPI_WEB_* marker line back to the
+     serving script (Tools/run-web-smoke-chrome.mjs) at /report. -->
+<html>
+<head><meta charset="utf-8"><title>slippi web smoke</title></head>
+<body>
+<script>
+  const params = new URLSearchParams(location.search);
+  const game = params.get('game') || 'game.dol';
+  const frames = params.get('frames') || '600';
+
+  function report(line) {
+    fetch('/report', { method: 'POST', body: line }).catch(() => {});
+  }
+  function handleLine(line) {
+    console.log(line);
+    if (typeof line === 'string' && line.startsWith('SLIPPI_WEB')) report(line);
+  }
+
+  window.onerror = (msg) => report('SLIPPI_WEB_PAGE_ERROR: ' + msg);
+  if (!crossOriginIsolated) report('SLIPPI_WEB_PAGE_ERROR: not crossOriginIsolated');
+
+  var Module = {
+    arguments: ['--exec', '/' + game, '--frames', String(frames)],
+    print: handleLine,
+    printErr: handleLine,
+    preRun: [function () {
+      Module.addRunDependency('fetch-game');
+      fetch('/' + game)
+        .then((r) => { if (!r.ok) throw new Error('fetch ' + game + ': ' + r.status); return r.arrayBuffer(); })
+        .then((buf) => {
+          FS.writeFile('/' + game, new Uint8Array(buf));
+          Module.removeRunDependency('fetch-game');
+        })
+        .catch((e) => report('SLIPPI_WEB_PAGE_ERROR: ' + e.message));
+    }],
+    onExit: (code) => report('SLIPPI_WEB_EXIT=' + code),
+  };
+</script>
+<script src="dolphin-web.js"></script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+name: wasm
+
+on:
+  pull_request:
+  push:
+    branches: [slippi]
+
+jobs:
+  wasm-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Read emsdk pin
+        id: pin
+        run: echo "ver=$(cat Tools/emsdk-version.txt)" >> "$GITHUB_OUTPUT"
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ steps.pin.outputs.ver }}
+          actions-cache-folder: emsdk-cache
+
+      - uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: wasm
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Apply web submodule patches
+        run: |
+          git -C Externals/fmt/fmt apply "$(pwd)/Tools/web-patches/fmt-chrono-consteval.patch"
+          git -C Externals/SFML/SFML apply "$(pwd)/Tools/web-patches/sfml-emscripten.patch"
+
+      - name: Configure and build (wasm)
+        run: |
+          emcmake cmake -B build-web -GNinja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build build-web --target dolphin-web
+
+      - name: Configure and build (native determinism twin)
+        run: |
+          sudo apt-get install -y libevdev-dev libudev-dev libusb-1.0-0-dev
+          cmake -B build-native-smoke -GNinja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DENABLE_HEADLESS_SMOKE=ON -DENABLE_QT=OFF -DENABLE_NOGUI=OFF -DENABLE_TESTS=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build build-native-smoke --target dolphin-web
+
+      - name: Fetch homebrew test binary
+        run: ./Tools/fetch-test-dol.sh build-web/test.dol
+
+      - name: Determinism smoke (native vs wasm under node)
+        timeout-minutes: 35
+        run: ./Tools/wasm-determinism.sh build-web/test.dol 600
+
+      # Real browser security context: COOP/COEP, crossOriginIsolated,
+      # SharedArrayBuffer, pthread workers, .data fetch. Shorter run — the boot
+      # path is what node can't validate; determinism is covered above.
+      - name: Browser smoke (headless Chromium)
+        timeout-minutes: 25
+        run: |
+          node Tools/run-web-smoke-chrome.mjs \
+            build-web/Binaries/dolphin-web.js build-web/test.dol 120 | tee chrome-smoke.log
+          U=$(mktemp -d)
+          ./build-native-smoke/Binaries/dolphin-headless-smoke \
+            --user "$U" --exec build-web/test.dol --frames 120 | grep MEM1_HASH > native-120.log
+          rm -rf "$U"
+          grep MEM1_HASH chrome-smoke.log > chrome-120.log
+          diff native-120.log chrome-120.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dolphin-web
+          path: |
+            build-web/Binaries/dolphin-web.js
+            build-web/Binaries/dolphin-web.wasm
+            build-web/Binaries/dolphin-web.data

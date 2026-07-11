@@ -8,6 +8,7 @@ target_link_libraries(dolphin-web
 PRIVATE
   core
   uicommon
+  xxhash::xxhash
 )
 
 if(EMSCRIPTEN)

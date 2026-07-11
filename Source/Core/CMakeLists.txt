@@ -43,11 +43,12 @@ endif()
 #    set(RUST_FEATURES "playback")
 #endif()
 
-if(NOT EMSCRIPTEN)
+if(NOT EMSCRIPTEN AND NOT ENABLE_HEADLESS_SMOKE)
   corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Externals/SlippiRustExtensions/Cargo.toml ${RUST_FEATURES})
 else()
   # Web Phase 0: the Rust workspace is not yet cross-compiled for
   # wasm32-unknown-emscripten; Common/SlippiRustStubs.c satisfies the linker.
+  # The native headless-smoke twin uses the same stubs for parity.
 endif()
 # slippi change: end
 

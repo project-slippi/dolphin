@@ -113,8 +113,22 @@ Browser main thread (JS/TS host app — no wasm on it)
 #### 1. CPU: JitWasm (v1 flagship, highest risk — Phase 1)
 
 Precedent: v86 (x86 PC emulator) proves the architecture — runtime-generate wasm
-modules for hot code, instantiate asynchronously, install into a shared function
-table, keep an interpreter tier for cold/new code.
+modules for hot code, instantiate asynchronously, install into a function table,
+keep an interpreter tier for cold/new code.
+
+> **Correction (2026-07-10 external review):** WebAssembly tables are
+> *agent-local* — each pthread worker has its own instance and function table;
+> only linear memory is shared. A compiler worker therefore **cannot** install
+> functions into the CPU worker's table. Publication must be two-phase:
+> compile `WebAssembly.Module` bytes anywhere (module objects are structured-
+> cloneable postMessage payloads), but **instantiate + table-install must run
+> on the CPU worker itself**, at an explicit safe point where the CPU run loop
+> yields to its worker event loop (CachedInterpreter's loop never does today —
+> a periodic `emscripten_yield`-style rendezvous or message-drain point must be
+> added). Builds must enable `-sALLOW_TABLE_GROWTH` (default off). Table slots
+> need generation counters for invalidation, with dead entries cleared. This
+> exact mechanism is a **Phase 0.5 spike** (see phase table) and is the go/no-go
+> gate for starting JitWasm proper.
 
 - **Structure:** `JitWasm : JitBase` mirroring CachedInterpreter (own block-cache
   subclass, same `Run()/Jit(u32)/ClearCache()` surface). New `CPUCore::JITWasm` enum
@@ -187,6 +201,20 @@ table, keep an interpreter tier for cold/new code.
 - **Presentation:** video thread owns the OffscreenCanvas surface; worker-side rAF
   drives presentation; emulation free-runs off CoreTiming (display Hz ≠ 60 handled by
   decoupled present, as on desktop).
+
+> **Correction (2026-07-10 external review):** the GPU/video thread blocks in
+> `RunGpuLoop()` until shutdown (VideoCommon/Fifo.cpp:288), but browser WebGPU
+> is event-loop driven — adapter/device acquisition, buffer-map completion, and
+> worker rAF callbacks cannot fire while the worker spins in wasm. The blanket
+> "no Asyncify anywhere" rule therefore needs one of: (a) refactor the video
+> thread's loop into an event-driven state machine that returns to its event
+> loop, (b) a narrowly scoped JSPI/Asyncify path around the blocking waits, or
+> (c) a dedicated event-driven WebGPU worker behind an RPC layer. Decide in the
+> **Phase 0.5 spike** (adapter acquisition + buffer map on a pthread without
+> deadlock). Canvas ownership is likewise unresolved: PROXY_TO_PTHREAD only
+> moves main() to a pthread; Dolphin then spawns a *different* emu/video thread
+> (Core.cpp:254), so the OffscreenCanvas must be explicitly transferred to that
+> thread (or the thread topology changed) — prototype this in the same spike.
 - **EFB readbacks:** WebGPU buffer maps are async-only. CPU EFB peeks/pokes block the
   CPU pthread on a future while the GPU worker pumps — legal off-main-thread. Melee
   gameplay does not depend on EFB peeks, so this is correctness plumbing, not a perf
@@ -218,7 +246,10 @@ table, keep an interpreter tier for cold/new code.
   SoundStream` reproduces exactly that using Emscripten Audio Worklets
   (`emscripten/webaudio.h` — the worklet runs the wasm module inside
   AudioWorkletGlobalScope on shared memory, so the render callback calls
-  `Mixer::Mix` directly; no ring buffer needed unless reentrancy problems appear).
+  `Mixer::Mix` directly; no ring buffer needed unless reentrancy problems appear —
+  this direct-mixer approach is the **decided** design; the SAB-ring alternative is
+  rejected. AudioContext creation/resume must happen inside the Play-button user
+  gesture or Chromium keeps it suspended).
   Register it in `CreateSoundStreamForBackend` (AudioCommon.cpp:28-44). ~10-20 ms
   target latency. DSP-HLE only in v1 (the default; no DSP ROM dumps needed, no DSP
   thread exists under HLE).
@@ -296,11 +327,12 @@ infrastructure. v1's only obligation: don't add new direct enet call sites.
 
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
-| **0. Toolchain bring-up** | emsdk pin + CMake platform gate; Externals triage; MemArenaEmscripten; Rust-under-emscripten proven (tracing crate); DolphinWeb skeleton; CI job | Headless browser boot of Melee to first frames on CachedInterpreter + Null video/audio; DTM-replay RAM-hash matches native CachedInterpreter for N frames; green CI build |
+| **0. Toolchain bring-up** | emsdk pin + CMake platform gate; Externals triage; MemArenaEmscripten; Rust stubs (see 0.5); DolphinWeb skeleton; CI job | Headless boot on CachedInterpreter + Null video/audio; per-checkpoint MEM1 XXH64 (direct XXH64 — `Common::GetHash64` is arch-dependent) matches native twin with identical config/stubs, zero panic alerts, clean exit, hard timeouts; CI includes an actual headless-Chromium boot (COOP/COEP served), not just node |
+| **0.5 Architecture spikes** (added per 2026-07-10 reviews) | Throwaway prototypes, each with a written result: (1) CPU-worker-local module publication — compile Module on worker A, postMessage, instantiate + table-install on worker B inside a run-loop safe point, `-sALLOW_TABLE_GROWTH`, invalidation generations; **pause-to-resume must measure <1 ms** or the JIT architecture is rejected as designed; (2) WebGPU on a pthread without event-loop deadlock: adapter/device acquisition, uploads via `queue.writeBuffer` (synchronous semantics — mapAsync is only on the readback path), one EFB-style readback via future-wait, OffscreenCanvas transfer to a late-spawned pthread; (3) browser-main→host-thread RPC over Emscripten proxying/HostJobs; (4) Rust `wasm32-unknown-emscripten` staticlib link of the smallest real crate — this target is historically under-maintained, so the spike also validates the fallback: naga built as a separate `wasm32-unknown-unknown` module called over a JS bridge; (5) OPFS/WasmFS random-read of a >1 GiB file | Each spike demonstrably works in headless Chromium, or the affected design section is rewritten before its phase starts. **JitWasm implementation does not begin until spike 1 passes; WebGPU backend not until spike 2 passes** |
 | **1. JitWasm** | wasm-emitter lib; JitWasm backend + tiering + compile thread; determinism harness | Melee in-game ≥60 VPS on reference machine (Null video/audio); replay lockstep green vs native |
 | **2. WebGPU backend** | `VideoBackends/WebGPU` native-first (wgpu-native, `ENABLE_WGPU`), then emdawnwebgpu in browser; naga-ffi | Melee renders correctly (golden-frame diffs vs Vulkan captures); 60 FPS at 2x IR in browser on reference machine |
 | **3. Audio+input+app** | AudioWorklet stream; ciface backend; OPFS import/config UX; pause/resume | "Playable v1": cold page → import ISO → play vs CPU with sound, refresh-safe config/replays |
-| **4. Hardening/release** | perf/pacing polish, error surfaces, deploy pipeline + headers, docs | Public beta URL, Chromium floor documented |
+| **4. Hardening/release** | perf/pacing polish, error surfaces, deploy pipeline + headers, docs | Public beta URL, Chromium floor documented; **full-stack release gate**: JitWasm + WebGPU + audio + input + OPFS together on the reference machine — pinned Chrome version, fixed replay, ≥10 min warm+cold runs, frame-time p95/p99, audio underrun count, memory ceiling |
 | **5+. Options** | Replay viewer (v1.5 candidate) · WebRTC netplay (client+server spec) · GC adapter via WebUSB · Jukebox · Firefox/Safari | each gets its own spec/plan |
 
 Reference machine for the perf bar (proposal, confirm before Phase 1 gate): 2021-class
@@ -314,7 +346,7 @@ Reference machine for the perf bar (proposal, confirm before Phase 1 gate): 2021
 | 2 | Module churn / instantiate latency | batching, background compile tier, persist generated wasm bytes in OPFS keyed by game+build hash (compiled `WebAssembly.Module` objects are not persistable in Chromium — only our bytes are) |
 | 3 | wgpu-native ↔ emdawnwebgpu header skew | single `WebGPUCompat.h` shim, pinned versions; Dawn-native fallback for dev loop |
 | 4 | EFB peek/poke async-map semantics | Phase 2 spike: future-wait off-main-thread under emdawnwebgpu |
-| 5 | Rust deps not wasm-clean (ureq, rodio, `open`) | `web` cargo feature no-ops; corrosion target `wasm32-unknown-emscripten` proven in Phase 0 with the smallest crate |
+| 5 | Rust deps not wasm-clean (ureq, rodio, `open`) | `web` cargo feature no-ops; corrosion target `wasm32-unknown-emscripten` proven in **Phase 0.5 spike 4** (Phase 0 ships C stubs only; Phase 2 needs real Rust for naga-ffi, so the spike must land first) |
 | 6 | Dual-core GPU thread deliberately busy-spins (Fifo.cpp:272; BlockingLoop only sleeps when `m_may_sleep`) — burns a worker core | ship v1 single-core if needed (offline has no rollback pressure); measure in Phase 1; `MAIN_CPU_THREAD=false` is a config flip |
 | 6b | wasm32 = ILP32, which the tree has never built for (CMakeLists.txt:226 "this'll break" comment) | `ENABLE_GENERIC`-style arch branch + fix latent pointer-size assumptions as compile errors/harness failures surface |
 | 6c | Rust hard-linked into `common` blocks all bring-up until the workspace cross-compiles | Phase 0 ships a C stub shim for the 40 `slprs_*` symbols behind a CMake switch; real `web`-feature crates land before Phase 3 (jukebox/user surfaces needed then) |
@@ -346,7 +378,10 @@ Reference machine for the perf bar (proposal, confirm before Phase 1 gate): 2021
 
 1. Confirm the reference machine definition for the 60 FPS gate before Phase 1 exit.
 2. Hosting target for the beta (slippi.gg subdomain? — deploy pipeline needs COOP/COEP
-   header control).
+   header control). Product constraint to keep in view: cross-origin isolation is
+   mandatory for SharedArrayBuffer, which rules out third-party embedding (iframes on
+   other sites) and constrains CDN setup (every subresource needs CORP/CORS headers).
+   Acceptable for a self-hosted v1; any embed story is out of scope.
 3. Should the native `ENABLE_WGPU` backend eventually ship to desktop users (extra QA
    surface) or stay a dev tool?
 4. Savestate/replay format compatibility guarantees between desktop and web builds

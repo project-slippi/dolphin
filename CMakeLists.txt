@@ -125,6 +125,8 @@ option(ENABLE_QT "Enable Qt (Default)" ON)
 option(ENABLE_LTO "Enables Link Time Optimization" OFF)
 option(ENABLE_GENERIC "Enables generic build that should run on any little-endian host" OFF)
 option(ENABLE_HEADLESS "Enables running Dolphin as a headless variant" OFF)
+# slippi change: native twin of the wasm build for MEM1 determinism comparison
+option(ENABLE_HEADLESS_SMOKE "Build the DolphinWeb headless-smoke frontend natively" OFF)
 option(ENABLE_ALSA "Enables ALSA sound backend" ON)
 option(ENABLE_PULSEAUDIO "Enables PulseAudio sound backend" ON)
 option(ENABLE_CUBEB "Enables Cubeb sound backend" ON)

@@ -191,7 +191,9 @@ PRIVATE
 
 # slippi change: on Emscripten the Rust workspace isn't built yet (Phase 0);
 # a C stub provides the slprs_* symbols instead.
-if(EMSCRIPTEN)
+if(EMSCRIPTEN OR ENABLE_HEADLESS_SMOKE)
+  # The native headless-smoke twin also uses the stubs so both legs of the
+  # determinism comparison run the same code.
   target_sources(common PRIVATE SlippiRustStubs.c)
 else()
   target_link_libraries(common PUBLIC slippi_rust_extensions)
