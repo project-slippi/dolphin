@@ -288,7 +288,11 @@ void SystemTimersManager::Init()
       m_cpu_core_clock, m_system.GetAudioInterface().GetAIDSampleRateDivisor());
   core_timing.ScheduleEvent(audio_dma_callback_period, m_event_type_audio_dma);
 
-  core_timing.ScheduleEvent(vi.GetTicksPerField(), m_event_type_patch_engine);
+  // slippi change: PatchEngine's event type is no longer registered above, so scheduling it here
+  // was always passing a null EventType*, tripping the "Event type is nullptr" assert in
+  // CoreTiming::ScheduleEvent on every boot.
+  // core_timing.ScheduleEvent(vi.GetTicksPerField(), m_event_type_patch_engine);
+  // end slippi change
 
   if (m_system.IsWii())
     core_timing.ScheduleEvent(m_ipc_hle_period, m_event_type_ipc_hle);
