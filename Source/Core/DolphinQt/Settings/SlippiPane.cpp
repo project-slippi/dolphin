@@ -185,6 +185,19 @@ void SlippiPane::CreateLayout()
   sfx_music_slider_layout->addWidget(m_music_volume_percent, 1, 2);
 
   jukebox_settings_layout->addLayout(sfx_music_slider_layout);
+
+  // Discord Settings
+  auto* discord_settings = new QGroupBox(tr("Discord Settings"));
+  auto* discord_settings_layout = new QVBoxLayout();
+  discord_settings->setLayout(discord_settings_layout);
+  m_main_layout->addWidget(discord_settings);
+
+  m_enable_discord_rpc = new QCheckBox(tr("Enable Discord Rich Presence"));
+  m_enable_discord_rpc->setToolTip(
+      tr("Show your current Slippi activity on your Discord profile, such as menu, "
+         "matchmaking, and in-game status. When enabled, Discord friends can see "
+         "what you're playing."));
+  discord_settings_layout->addWidget(m_enable_discord_rpc);
 #else
   // Playback Settings
   auto* playback_settings = new QGroupBox(tr("Playback Settings"));
@@ -245,6 +258,9 @@ void SlippiPane::LoadConfig()
   m_music_volume_percent->setText(tr(" %1%").arg(jukebox_volume));
 
   m_music_volume_slider->setDisabled(!enable_jukebox);
+
+  // Discord Settings
+  m_enable_discord_rpc->setChecked(Config::Get(Config::SLIPPI_ENABLE_DISCORD_RPC));
 #else
   // HOOKUP PLAYBACK STUFF
 #endif
@@ -278,6 +294,9 @@ void SlippiPane::ConnectLayout()
   // Ranked Settings
   connect(m_enable_local_rank, &QCheckBox::toggled, this, &SlippiPane::ToggleLocalRankInfo);
   connect(m_enable_opp_rank, &QCheckBox::toggled, this, &SlippiPane::ToggleOpponentRankInfo);
+
+  // Discord Settings
+  connect(m_enable_discord_rpc, &QCheckBox::toggled, this, &SlippiPane::ToggleDiscordRichPresence);
 #else
   // HOOKUP PLAYBACK STUFF
 #endif
@@ -334,6 +353,11 @@ void SlippiPane::ToggleLocalRankInfo(bool checked)
 void SlippiPane::ToggleOpponentRankInfo(bool checked)
 {
   Config::SetBase(Config::SLIPPI_ENABLE_RANK_OPP, checked);
+}
+
+void SlippiPane::ToggleDiscordRichPresence(bool checked)
+{
+  Config::SetBase(Config::SLIPPI_ENABLE_DISCORD_RPC, checked);
 }
 
 void SlippiPane::OnMusicVolumeUpdate(int volume)
