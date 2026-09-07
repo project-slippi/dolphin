@@ -1,11 +1,12 @@
 // Copyright 2015 Dolphin Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#ifdef _WIN32
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
 #include <Windows.h>
 #endif
 
@@ -23,6 +24,7 @@
 #include "Common/Config/Config.h"
 #include "Common/MsgHandler.h"
 #include "Common/ScopeGuard.h"
+#include "Common/Version.h"
 
 #include "Core/Boot/Boot.h"
 #include "Core/Config/MainSettings.h"
@@ -125,6 +127,27 @@ int main(int argc, char* argv[])
     freopen("CONOUT$", "w", stderr);
   }
 #endif
+
+  // The launcher uses --version to validate the installed Dolphin build. Handle it
+  // before initializing Qt so GUI builds reliably write to the launcher's pipe.
+  if (argc == 2 && std::strcmp(argv[1], "--version") == 0)
+  {
+    const std::string version = Common::GetSemVerStr() + "\n";
+#ifdef _WIN32
+    const HANDLE stdout_handle = ::GetStdHandle(STD_OUTPUT_HANDLE);
+    if (stdout_handle && stdout_handle != INVALID_HANDLE_VALUE)
+    {
+      DWORD written = 0;
+      ::WriteFile(stdout_handle, version.data(), static_cast<DWORD>(version.size()), &written,
+                  nullptr);
+    }
+    else
+#endif
+    {
+      std::fwrite(version.data(), 1, version.size(), stdout);
+    }
+    return 0;
+  }
 
   Core::DeclareAsHostThread();
 
