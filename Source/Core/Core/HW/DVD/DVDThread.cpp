@@ -315,7 +315,13 @@ void DVDThread::ReadFile(std::string& fileName, std::vector<u8>& buf)
   {
     WaitUntilIdle();
     const DiscIO::FileSystem* filesystem = m_disc->GetFileSystem(DiscIO::PARTITION_NONE);
-    auto fileInfo = filesystem->FindFileInfo(fileName);
+    auto fileInfo = filesystem ? filesystem->FindFileInfo(fileName) : nullptr;
+    if (!fileInfo)
+    {
+      // Game file links can name any disc file, so a missing one must not crash
+      INFO_LOG_FMT(SLIPPI, "File not found on disc: {}", fileName);
+      return;
+    }
     auto fileSize = fileInfo->GetSize();
     buf.resize(fileSize);
     DiscIO::ReadFile(*m_disc, DiscIO::PARTITION_NONE, fileInfo.get(), buf.data(), fileSize);
