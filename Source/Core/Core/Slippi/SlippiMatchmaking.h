@@ -6,7 +6,9 @@
 #include "Core/Slippi/SlippiUser.h"
 
 #include <random>
+#include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #ifndef _WIN32
@@ -15,8 +17,17 @@
 #endif
 
 #include <nlohmann/json.hpp>
+
+// Defined in SlippiRustExtensions.h. Forward-declared here because not every project that includes
+// this header has the Rust include path.
+struct SlippiStunObservation;
+
 using json = nlohmann::json;
 
+// Drives a search for opponents. The conversation with the matchmaking service happens on the Rust
+// side; this class owns the UDP socket that will be used for netplay, learns its public address
+// through STUN, keeps its NAT mapping alive while queued, and connects to the opponents once a
+// match arrives.
 class SlippiMatchmaking
 {
 public:
@@ -96,18 +107,33 @@ public:
   static bool IsFixedRulesMode(OnlinePlayMode mode);
 
 protected:
-  const std::string MM_HOST_DEV = "mm2.slippi.gg";  // Dev host
-  const std::string MM_HOST_PROD = "mm.slippi.gg";  // Production host
-  const u16 MM_PORT = 43113;
+  // Public STUN servers used to learn the netplay socket's public address, tried in order until
+  // two have answered. Two different servers are needed to tell a cone NAT, which reuses one public
+  // port, from a symmetric NAT, which hands out a new one per destination. The non-Google entries
+  // are for networks that block Google.
+  const std::vector<std::pair<std::string, u16>> STUN_SERVERS = {
+      {"stun.l.google.com", 19302},
+      {"stun1.l.google.com", 19302},
+      {"stun.cloudflare.com", 3478},
+      {"global.stun.twilio.com", 3478},
+  };
 
-  std::string MM_HOST = "";
+  // How often to send a packet from the netplay socket while queued so the NAT mapping the
+  // opponent will use does not expire.
+  const u64 STUN_KEEPALIVE_INTERVAL_MS = 15000;
 
+  // Bound to the netplay port for the duration of the queue. Only its socket is used.
   ENetHost* m_client;
-  ENetPeer* m_server;
+  ENetAddress m_stun_addr;
+  bool m_has_stun_addr = false;
+  u64 m_last_keepalive_ms = 0;
+
+  // Identifies the Rust-side session this object started, so tearing this object down cannot
+  // cancel a newer search started by another instance.
+  u64 m_session_id = 0;
 
   std::default_random_engine generator;
 
-  bool is_mm_connected = false;
   bool is_mm_terminated = false;
 
   std::thread m_matchmake_thread;
@@ -142,10 +168,10 @@ protected:
       {ProcessState::OPPONENT_CONNECTING, true},
   };
 
-  void disconnectFromServer();
   void terminateMmConnection();
-  void sendMessage(json msg);
-  int receiveMessage(json& msg, int max_attempts);
+
+  bool stunBindingRequest(const ENetAddress& server, SlippiStunObservation& result);
+  void sendStunKeepalive();
 
   void startMatchmaking();
   void handleMatchmaking();
