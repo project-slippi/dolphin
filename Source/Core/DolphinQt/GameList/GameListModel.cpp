@@ -306,9 +306,11 @@ bool GameListModel::ShouldDisplayGameListItem(int index) const
     case DiscIO::Platform::Triforce:
       return Config::Get(Config::MAIN_GAMELIST_LIST_TRI);
     case DiscIO::Platform::WiiDisc:
-      return Config::Get(Config::MAIN_GAMELIST_LIST_WII);
     case DiscIO::Platform::WiiWAD:
-      return Config::Get(Config::MAIN_GAMELIST_LIST_WAD);
+      // Slippi Dolphin does not ship the Wii keys and refuses to boot Wii titles, so never list
+      // them. This also keeps the Wii-only game list actions (WAD install, save export, system
+      // update) out of reach
+      return false;
     case DiscIO::Platform::ELFOrDOL:
       return Config::Get(Config::MAIN_GAMELIST_LIST_ELF_DOL);
     default:
