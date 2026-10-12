@@ -207,17 +207,14 @@ bool DolReader::LoadAncastIntoMemory(Core::System& system) const
     return false;
   }
 
-  // Decrypt the Ancast image
-  static constexpr u8 vwii_ancast_retail_key[0x10] = {0x2e, 0xfe, 0x8a, 0xbc, 0xed, 0xbb,
-                                                      0x7b, 0xaa, 0xe3, 0xc0, 0xed, 0x92,
-                                                      0xfa, 0x29, 0xf8, 0x66};
-  static constexpr u8 vwii_ancast_dev_key[0x10] = {0x26, 0xaf, 0xf4, 0xbb, 0xac, 0x88, 0xbb, 0x76,
-                                                   0x9d, 0xfc, 0x54, 0xdd, 0x56, 0xd8, 0xef, 0xbd};
+  // Decrypt the Ancast image. Slippi Dolphin does not ship any of Nintendo's keys, so these are
+  // left zeroed
+  static constexpr u8 vwii_ancast_retail_key[0x10] = {};
+  static constexpr u8 vwii_ancast_dev_key[0x10] = {};
   std::unique_ptr<Common::AES::Context> ctx =
       Common::AES::CreateContextDecrypt(is_dev ? vwii_ancast_dev_key : vwii_ancast_retail_key);
 
-  static constexpr u8 vwii_ancast_iv[0x10] = {0x59, 0x6d, 0x5a, 0x9a, 0xd7, 0x05, 0xf9, 0x4f,
-                                              0xe1, 0x58, 0x02, 0x6f, 0xea, 0xa7, 0xb8, 0x87};
+  static constexpr u8 vwii_ancast_iv[0x10] = {};
   std::vector<u8> decrypted(body_size);
   if (!ctx->Crypt(vwii_ancast_iv, section.m_data.data() + sizeof(EspressoAncastHeader),
                   decrypted.data(), body_size))
