@@ -100,9 +100,8 @@ private:
 
   static constexpr u32 MAX_MAIL_SIZE = 208952;
   static std::string GetValueFromCGIResponse(const std::string& response, const std::string& key);
-  static constexpr std::array<u8, 20> MAIL_CHECK_KEY = {0xce, 0x4c, 0xf2, 0x9a, 0x3d, 0x6b, 0xe1,
-                                                        0xc2, 0x61, 0x91, 0x72, 0xb5, 0xcb, 0x29,
-                                                        0x8c, 0x89, 0x72, 0xd4, 0x50, 0xad};
+  // Slippi Dolphin does not ship any of Nintendo's Wii keys, so this is left zeroed
+  static constexpr std::array<u8, 20> MAIL_CHECK_KEY{};
 
   static constexpr u32 DEFAULT_SCHEDULER_SPAN_MINUTES = 11;
 
