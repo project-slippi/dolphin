@@ -3,11 +3,13 @@
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
+#include "Common/Timer.h"
 #include "Core/Boot/Boot.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/HW/DVD/DVDThread.h"
 #include "Core/System.h"
+#include "SlippiRustExtensions.h"
 
 std::string getFilePath(std::string file_name)
 {
@@ -27,6 +29,67 @@ std::string getFilePath(std::string file_name)
   }
 
   return "";
+}
+
+bool SlippiGameFileLoader::readDiscFile(void* ctx, const char* file_name, const u8** out_data,
+                                        uintptr_t* out_len)
+{
+  auto* loader = static_cast<SlippiGameFileLoader*>(ctx);
+  std::string name(file_name);
+
+  // ReadFile leaves the buffer untouched when it can't read the file, so clear it first to avoid
+  // handing Rust the previous file
+  loader->disc_read_buffer.clear();
+  Core::System::GetInstance().GetDVDThread().ReadFile(name, loader->disc_read_buffer);
+
+  *out_data = loader->disc_read_buffer.data();
+  *out_len = loader->disc_read_buffer.size();
+  return !loader->disc_read_buffer.empty();
+}
+
+bool SlippiGameFileLoader::resolveLinks(const std::string& file_name, std::string& contents)
+{
+  u64 start_ms = Common::Timer::NowMs();
+
+  SlippiResolvedGameFile result =
+      slprs_gamefile_resolve(file_name.c_str(), reinterpret_cast<const u8*>(contents.data()),
+                             contents.size(), this, &SlippiGameFileLoader::readDiscFile);
+  disc_read_buffer.clear();
+  disc_read_buffer.shrink_to_fit();
+
+  if (result.status == SLPRS_GAMEFILE_NO_LINKS)
+  {
+    return true;
+  }
+
+  if (result.status != SLPRS_GAMEFILE_RESOLVED)
+  {
+    // Serve nothing rather than a file with dangling links. The reason was logged by Rust
+    ERROR_LOG_FMT(SLIPPI, "Serving nothing for {} because its links could not be resolved",
+                  file_name);
+    contents.clear();
+    return false;
+  }
+
+  contents.assign(reinterpret_cast<const char*>(result.data), result.len);
+  slprs_gamefile_free(result);
+  INFO_LOG_FMT(SLIPPI, "Resolved links in {}, {} bytes, took {} ms", file_name, contents.size(),
+               Common::Timer::NowMs() - start_ms);
+
+  // Drop a copy for offline comparison when the user has created the dump folder
+  std::string dump_dir = File::GetUserPath(D_DUMP_IDX) + "GameFiles/";
+  if (File::IsDirectory(dump_dir))
+  {
+    std::string dump_path = dump_dir + file_name;
+    if (File::WriteStringToFile(dump_path, contents))
+      INFO_LOG_FMT(SLIPPI, "Wrote resolved {} to {}", file_name, dump_path);
+  }
+  else
+  {
+    INFO_LOG_FMT(SLIPPI, "Create {} to dump resolved game files", dump_dir);
+  }
+
+  return true;
 }
 
 u32 SlippiGameFileLoader::LoadFile(Core::System& system, std::string file_name, std::string& data)
@@ -73,6 +136,12 @@ u32 SlippiGameFileLoader::LoadFile(Core::System& system, std::string file_name, 
     Core::System::GetInstance().GetDVDThread().ReadFile(file_name, buf);
     std::string diff_contents = file_contents;
     decoder.Decode((char*)buf.data(), buf.size(), diff_contents, &file_contents);
+  }
+
+  // Pull in any assets the file links to on the disc
+  if (!file_contents.empty())
+  {
+    resolveLinks(file_name, file_contents);
   }
 
   file_cache[file_name] = file_contents;
