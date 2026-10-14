@@ -3,6 +3,7 @@
 
 #include "UICommon/DiscordPresence.h"
 
+#include "Core/Config/MainSettings.h"
 #include "Core/Config/NetplaySettings.h"
 #include "Core/Config/UISettings.h"
 #include "Core/ConfigManager.h"
@@ -118,6 +119,11 @@ void Init()
 {
 #ifdef USE_DISCORD_PRESENCE
   if (!Config::Get(Config::MAIN_USE_DISCORD_PRESENCE))
+    return;
+
+  // Slippi's Rich Presence owns the Discord activity slot when enabled, so
+  // don't start Dolphin's generic presence on top of it.
+  if (Config::Get(Config::SLIPPI_ENABLE_DISCORD_RPC))
     return;
 
   DiscordEventHandlers handlers = {};

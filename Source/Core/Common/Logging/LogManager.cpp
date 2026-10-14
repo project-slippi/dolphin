@@ -171,6 +171,8 @@ LogManager::LogManager()
   m_log[LogType::SLIPPI_RUST_ONLINE] = {"SLIPPI_RUST_ONLINE", "[Rust] Slippi Online", false, true};
   m_log[LogType::SLIPPI_RUST_JUKEBOX] = {"SLIPPI_RUST_JUKEBOX", "[Rust] Slippi Jukebox", false,
                                          true};
+  m_log[LogType::SLIPPI_RUST_DISCORD_RPC] = {"SLIPPI_RUST_DISCORD_RPC", "[Rust] Slippi Discord RPC",
+                                             false, true};
   m_log[LogType::SP1] = {"SP1", "Serial Port 1"};
   m_log[LogType::SYMBOLS] = {"SYMBOLS", "Symbols"};
   m_log[LogType::VIDEO] = {"Video", "Video Backend"};
