@@ -11,6 +11,7 @@ BINARY_PATH="./build/Binaries/"
 # Build type
 if [ "$1" == "playback" ]
     then
+        CMAKE_FLAGS+=" -DSLIPPI_PLAYBACK=true"
         echo "Using Playback build config"
 else
         # TODO: move this around, playback should be the secondary build
