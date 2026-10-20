@@ -2717,6 +2717,22 @@ void CEXISlippi::prepareOnlineMatchState()
 
   // Add alt stage mode to output
   m_read_queue.push_back(static_cast<u8>(alt_stage_mode));
+
+  // Add the values used to determine each player's rank so the game can record them in the replay
+  for (int i = 0; i < 4; i++)
+  {
+    SlippiUser::UserInfo info = i < player_info.size() ? player_info[i] : SlippiUser::UserInfo();
+    appendWordToBuffer(&m_read_queue, std::bit_cast<u32>(info.ranked_rating));
+    appendWordToBuffer(&m_read_queue, static_cast<u32>(info.ranked_update_count));
+    appendHalfToBuffer(&m_read_queue, static_cast<u16>(info.ranked_global_placement));
+    appendHalfToBuffer(&m_read_queue, static_cast<u16>(info.ranked_regional_placement));
+  }
+
+  // Add whether each player is a bot account so the game can record it in the replay
+  for (int i = 0; i < 4; i++)
+  {
+    m_read_queue.push_back(static_cast<u8>(i < player_info.size() && player_info[i].is_bot));
+  }
 }
 
 u16 CEXISlippi::getRandomStage()
