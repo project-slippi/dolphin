@@ -3,6 +3,7 @@
 #include "Common/FileUtil.h"
 #include "Common/IOFile.h"
 #include "Common/Logging/Log.h"
+#include "Common/MsgHandler.h"
 #include "Common/Timer.h"
 #include "Core/Boot/Boot.h"
 #include "Core/ConfigManager.h"
@@ -68,6 +69,12 @@ bool SlippiGameFileLoader::resolveLinks(const std::string& file_name, std::strin
     ERROR_LOG_FMT(SLIPPI, "Serving nothing for {} because its links could not be resolved",
                   file_name);
     contents.clear();
+
+    // The game halts as soon as it finds the file missing, so the player only learns why from this
+    CriticalAlertFmtT("Slippi could not load {0}, so the game cannot continue.\n\n"
+                      "This is most likely caused by your ISO: a game file Slippi needs from it "
+                      "is missing or modified. Try an unmodified NTSC 1.02 ISO.",
+                      file_name);
     return false;
   }
 
