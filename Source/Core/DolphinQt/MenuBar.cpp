@@ -353,6 +353,14 @@ void MenuBar::AddToolsMenu()
   m_export_wii_saves =
       tools_menu->addAction(tr("Export All Wii Saves"), this, &MenuBar::ExportWiiSaves);
 
+  // Slippi Dolphin does not ship the Wii keys, so hide the Wii tools that depend on them
+  for (QAction* action : {m_boot_sysmenu, m_wad_install_action, m_manage_nand_menu->menuAction(),
+                          m_perform_online_update_menu->menuAction(), m_import_wii_save,
+                          m_import_wii_saves, m_export_wii_saves})
+  {
+    action->setVisible(false);
+  }
+
   QMenu* menu = new QMenu(tr("Connect Wii Remotes"), tools_menu);
 
   tools_menu->addSeparator();
@@ -741,11 +749,10 @@ void MenuBar::AddListColumnsMenu(QMenu* view_menu)
 
 void MenuBar::AddShowPlatformsMenu(QMenu* view_menu)
 {
+  // Wii and WAD are left out since Slippi Dolphin never lists Wii titles (see GameListModel)
   static const QMap<QString, const Config::Info<bool>*> platform_map{
-      {tr("Show Wii"), &Config::MAIN_GAMELIST_LIST_WII},
       {tr("Show GameCube"), &Config::MAIN_GAMELIST_LIST_GC},
       {tr("Show Triforce"), &Config::MAIN_GAMELIST_LIST_TRI},
-      {tr("Show WAD"), &Config::MAIN_GAMELIST_LIST_WAD},
       {tr("Show ELF/DOL"), &Config::MAIN_GAMELIST_LIST_ELF_DOL}};
 
   QActionGroup* platform_group = new QActionGroup(this);
