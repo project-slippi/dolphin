@@ -38,6 +38,7 @@ public:
     int ranked_update_count = 0;
     int ranked_global_placement = 0;
     int ranked_regional_placement = 0;
+    float ranked_mmr = 0;
   };
 
   SlippiUser(uintptr_t rs_exi_device_ptr);

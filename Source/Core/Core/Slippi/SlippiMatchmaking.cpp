@@ -566,6 +566,7 @@ void SlippiMatchmaking::handleMatchmaking()
         player_info.ranked_update_count = rank_el.value("updateCount", 0);
         player_info.ranked_global_placement = rank_el.value("globalPlacement", 0);
         player_info.ranked_regional_placement = rank_el.value("regionalPlacement", 0);
+        player_info.ranked_mmr = rank_el.value("mmr", 0.0);
       }
 
       m_player_info.push_back(player_info);
