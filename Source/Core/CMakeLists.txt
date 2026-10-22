@@ -38,7 +38,9 @@ endif()
 #    set(RUST_FEATURES "playback")
 #endif()
 
-corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Externals/SlippiRustExtensions/Cargo.toml ${RUST_FEATURES})
+# Only import the ffi crate. Without CRATES, Corrosion builds every binary in the workspace (e.g.
+# the slippi-hsd dev tool) into the runtime output directory, which then gets packaged unsigned.
+corrosion_import_crate(MANIFEST_PATH ${CMAKE_SOURCE_DIR}/Externals/SlippiRustExtensions/Cargo.toml ${RUST_FEATURES} CRATES slippi_rust_extensions)
 # slippi change: end
 
 if (APPLE AND ENABLE_QT)
