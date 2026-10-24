@@ -13,6 +13,7 @@
 #include <sstream>
 #include <string>
 #include <sys/stat.h>
+#include <thread>
 #include <vector>
 
 #include <Core/Config/MainSettings.h>
@@ -165,10 +166,22 @@ s32 PipeDevice::readFromPipe(PIPE_FD file_descriptor, char* in_buffer, size_t si
 #endif
 }
 
-void waitForInput(PIPE_FD file_descriptor)
+// Returns false if there is no input to wait for because nothing is writing to the pipe.
+bool waitForInput(PIPE_FD file_descriptor)
 {
 #ifdef _WIN32
-  // Not implemented yet.
+  // All 4 pipes always exist on Windows, so we must not block on those that no
+  // bot has connected to. Named pipes don't work with select, so we poll.
+  while (true)
+  {
+    DWORD bytes_available = 0;
+    // Fails if no client is connected, or if the client has gone away.
+    if (!PeekNamedPipe(file_descriptor, NULL, 0, NULL, &bytes_available, NULL))
+      return false;
+    if (bytes_available > 0)
+      return true;
+    std::this_thread::yield();
+  }
 #else
   fd_set set;
   FD_ZERO(&set);
@@ -177,6 +190,7 @@ void waitForInput(PIPE_FD file_descriptor)
   // Wait for activity on the socket
   // TODO: we should be using `poll` instead
   select(file_descriptor + 1, &set, NULL, NULL, NULL);
+  return true;
 #endif
 }
 
@@ -191,8 +205,8 @@ Core::DeviceRemoval PipeDevice::UpdateInput()
     char buf[32];
 
     // Avoids a busy loop if no data is present.
-    if (wait_for_input)
-      waitForInput(m_fd);
+    if (wait_for_input && !waitForInput(m_fd))
+      wait_for_input = false;
 
     // Fill buffer with whatever data is present.
     while (true)
