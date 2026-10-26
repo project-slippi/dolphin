@@ -38,6 +38,7 @@ namespace Config
 // Netplay Settings
 const Info<int> SLIPPI_ONLINE_DELAY{{System::Main, "Slippi", "OnlineDelay"}, 2};
 const Info<bool> SLIPPI_INPUT_SUGGESTIONS{{System::Main, "Slippi", "InputSuggestions"}, true};
+const Info<bool> SLIPPI_POLL_ON_SI_READ{{System::Main, "Slippi", "PollOnSIRead"}, true};
 const Info<bool> SLIPPI_ENABLE_SPECTATOR{{System::Main, "Slippi", "EnableSpectator"}, true};
 const Info<int> SLIPPI_SPECTATOR_LOCAL_PORT{{System::Main, "Slippi", "SpectatorLocalPort"}, 51441};
 const Info<bool> SLIPPI_SAVE_REPLAYS{{System::Main, "Slippi", "SaveReplays"}, true};

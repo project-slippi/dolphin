@@ -231,9 +231,10 @@ private:
   u16 getRandomStage();
   bool isDisconnected();
   void handleOnlineInputs(u8* payload);
-  void prepareOpponentInputs(s32 frame, bool should_skip);
+  bool prepareOpponentInputs(s32 frame, bool should_skip);
   void startInputSuggestions(u8 delay, u8 input_source_port);
-  void reportInputSuggestionsFrame(s32 frame, bool is_skip, u8 input_source_port, u8* inputs);
+  void reportInputSuggestionsFrame(s32 frame, bool is_skip, bool is_advancing, u8 input_source_port,
+                                   u8* inputs);
   void handleSendInputs(s32 frame, u8 delay, s32 checksum_frame, u32 checksum, u8* inputs);
   void handleCaptureSavestate(u8* payload);
   void handleLoadSavestate(u8* payload);

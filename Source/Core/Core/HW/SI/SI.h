@@ -80,6 +80,7 @@ private:
   };
 
   void SetNoResponse(u32 channel);
+  bool ReadDeviceData(u32 channel);
   void UpdateInterrupts();
   void GenerateSIInterrupt(SIInterruptType type);
 
@@ -245,6 +246,12 @@ private:
   USIStatusReg m_status_reg;
   USIEXIClockCount m_exi_clock_count;
   std::array<u8, 128> m_si_buffer{};
+
+  // slippi change: poll on SI read. Devices are read when the game reads a channel's input
+  // registers instead of on the console's poll schedule, so the game always gets the latest input.
+  // Input suggestions rely on this to know which frame each adapter report is for as soon as it
+  // arrives.
+  bool m_poll_on_read = false;
 
   Core::System& m_system;
 };
