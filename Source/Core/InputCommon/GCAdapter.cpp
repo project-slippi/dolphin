@@ -13,8 +13,13 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <mutex>
 #include <optional>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION
 #include <libusb.h>
@@ -106,7 +111,7 @@ enum class ControllerType : u8
 
 static std::array<u8, SerialInterface::MAX_SI_CHANNELS> s_controller_rumble;
 
-constexpr size_t CONTROLLER_INPUT_PAYLOAD_EXPECTED_SIZE = 37;
+constexpr size_t CONTROLLER_INPUT_PAYLOAD_EXPECTED_SIZE = ADAPTER_PAYLOAD_SIZE;
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION
 constexpr size_t CONTROLLER_OUTPUT_INIT_PAYLOAD_SIZE = 1;
 #endif
@@ -176,10 +181,22 @@ static u64 s_consecutive_slow_transfers = 0;
 static double s_read_rate = 0.0;
 // slippi change: for poll rate display
 
+// slippi change: input suggestions
+// The reads the game itself makes of each port. Each stored report is stamped with these, so callers
+// can tell whether a game poll came before or after it. Only access with s_read_mutex held!
+static std::array<u64, SerialInterface::MAX_SI_CHANNELS> s_game_poll_counts{};
+static std::atomic<ReportCallback> s_report_callback{nullptr};
+// slippi change: input suggestions
+
 static void ReadThreadFunc()
 {
   Common::SetCurrentThreadName("GCAdapter Read Thread");
   NOTICE_LOG_FMT(CONTROLLERINTERFACE, "GCAdapter read thread started");
+
+#ifdef _WIN32
+  // slippi change: wake as soon as a transfer completes, even when the CPU is busy
+  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+#endif
 
 #if GCADAPTER_USE_ANDROID_IMPLEMENTATION
   bool first_read = true;
@@ -305,6 +322,11 @@ static void WriteThreadFunc()
 {
   Common::SetCurrentThreadName("GCAdapter Write Thread");
   NOTICE_LOG_FMT(CONTROLLERINTERFACE, "GCAdapter write thread started");
+
+#ifdef _WIN32
+  // slippi change: wake as soon as a transfer completes, even when the CPU is busy
+  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+#endif
 
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION
   int size = 0;
@@ -800,7 +822,7 @@ static void Reset(CalledFromReadThread called_from_read_thread)
   NOTICE_LOG_FMT(CONTROLLERINTERFACE, "GC Adapter detached");
 }
 
-GCPadStatus Input(int chan)
+GCPadStatus Input(int chan, bool is_game_poll)
 {
   if (!UseAdapter())
     return {};
@@ -814,6 +836,10 @@ GCPadStatus Input(int chan)
 #endif
 
   std::lock_guard lk(s_read_mutex);
+
+  // slippi change: input suggestions
+  if (is_game_poll)
+    s_game_poll_counts[chan]++;
 
   auto& pad_state = s_port_states[chan];
 
@@ -841,6 +867,10 @@ static ControllerType IdentifyControllerType(u8 data)
 
 void ProcessInputPayload(const u8* data, std::size_t size)
 {
+  // slippi change: input suggestions
+  AdapterReport report;
+  ReportCallback report_callback = nullptr;
+
   if (size != CONTROLLER_INPUT_PAYLOAD_EXPECTED_SIZE
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION
       || data[0] != LIBUSB_DT_HID
@@ -928,8 +958,35 @@ void ProcessInputPayload(const u8* data, std::size_t size)
       pad_state.controller_type = type;
       pad_state.status = pad;
     }
+
+    // slippi change: input suggestions. Stamped under the same lock the game's polls take, so the
+    // counts say exactly which polls happened before this report was stored
+    report_callback = s_report_callback.load();
+    if (report_callback)
+    {
+      std::copy(s_game_poll_counts.begin(), s_game_poll_counts.end(), report.game_poll_counts);
+      std::copy(data, data + size, report.payload);
+    }
   }
+
+  // slippi change: input suggestions. Called outside the lock so the game's reads are never held up
+  // by the callback
+  if (report_callback)
+    report_callback(report);
 }
+
+// slippi change: input suggestions
+void SetReportCallback(ReportCallback callback)
+{
+  s_report_callback.store(callback);
+}
+
+u64 GetGamePollCount(int chan)
+{
+  std::lock_guard lk(s_read_mutex);
+  return s_game_poll_counts[chan];
+}
+// slippi change: input suggestions
 
 bool DeviceConnected(int chan)
 {

@@ -72,8 +72,14 @@ public:
   void DoState(PointerWrap& p) override;
 
   virtual GCPadStatus GetPadStatus();
+  // slippi change: the status read for the game's own poll of the pad (GetData)
+  virtual GCPadStatus GetPadStatusForGamePoll();
   virtual u32 MapPadStatus(const GCPadStatus& pad_status);
   virtual EButtonCombo HandleButtonCombos(const GCPadStatus& pad_status);
+
+  // slippi change: the origin the game was given (stick x/y, c-stick x/y, L, R) and the analog mode
+  // it set
+  void GetReportedOrigin(u8 origin[6], u8* analog_mode) const;
 
   // Send and Receive pad input from network
   static bool NetPlay_GetInput(int pad_num, GCPadStatus* status);

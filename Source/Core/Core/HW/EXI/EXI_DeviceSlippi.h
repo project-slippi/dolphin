@@ -151,7 +151,7 @@ private:
       {CMD_GET_GECKO_CODES, 0},
 
       // The following are used for Slippi online and also have fixed sizes
-      {CMD_ONLINE_INPUTS, 25},
+      {CMD_ONLINE_INPUTS, 26},
       {CMD_CAPTURE_SAVESTATE, 32},
       {CMD_LOAD_SAVESTATE, 32},
       {CMD_GET_MATCH_STATE, 0},
@@ -231,7 +231,10 @@ private:
   u16 getRandomStage();
   bool isDisconnected();
   void handleOnlineInputs(u8* payload);
-  void prepareOpponentInputs(s32 frame, bool should_skip);
+  bool prepareOpponentInputs(s32 frame, bool should_skip);
+  void startInputSuggestions(u8 delay, u8 input_source_port);
+  void reportInputSuggestionsFrame(s32 frame, bool is_skip, bool is_advancing, u8 input_source_port,
+                                   u8* inputs);
   void handleSendInputs(s32 frame, u8 delay, s32 checksum_frame, u32 checksum, u8* inputs);
   void handleCaptureSavestate(u8* payload);
   void handleLoadSavestate(u8* payload);

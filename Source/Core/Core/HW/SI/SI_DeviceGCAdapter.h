@@ -15,11 +15,16 @@ public:
   CSIDevice_GCAdapter(Core::System& system, SIDevices device, int device_number);
 
   GCPadStatus GetPadStatus() override;
+  // slippi change: input suggestions
+  GCPadStatus GetPadStatusForGamePoll() override;
   int RunBuffer(u8* buffer, int request_length) override;
 
   DataResponse GetData(u32& hi, u32& low) override;
 
 private:
+  // slippi change: input suggestions
+  GCPadStatus GetPadStatusImpl(bool is_game_poll);
+
   bool m_simulate_konga{};
 };
 }  // namespace SerialInterface

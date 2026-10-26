@@ -22,6 +22,7 @@
 #include "Core/HW/MMIO.h"
 #include "Core/HW/ProcessorInterface.h"
 #include "Core/HW/SI/SI_DeviceGBA.h"
+#include "Core/HW/SI/SI_DeviceGCController.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/Movie.h"
 #include "Core/NetPlayProto.h"
@@ -313,6 +314,11 @@ void SerialInterfaceManager::Init()
   // m_exi_clock_count.LOCK = 1;
 
   m_si_buffer = {};
+
+  // slippi change: poll on SI read
+  m_poll_on_read = Config::Get(Config::SLIPPI_POLL_ON_SI_READ);
+  INFO_LOG_FMT(SERIALINTERFACE, "Polling controllers {}",
+               m_poll_on_read ? "when the game reads them" : "on the console's schedule");
 }
 
 void SerialInterfaceManager::Shutdown()
@@ -371,6 +377,9 @@ void SerialInterfaceManager::RegisterMMIO(MMIO::Mapping* mmio, u32 base)
     mmio->Register(base | (SI_CHANNEL_0_IN_HI + 0xC * i),
                    MMIO::ComplexRead<u32>([i, clear_rdst](Core::System& system, u32) {
                      auto& si = system.GetSerialInterface();
+                     // slippi change: poll on SI read. The game reads the high word first
+                     if (si.m_poll_on_read)
+                       si.ReadDeviceData(i);
                      si.m_status_reg.hex &= clear_rdst;
                      si.UpdateInterrupts();
                      return si.m_channel[i].in_hi.hex;
@@ -558,26 +567,45 @@ void SerialInterfaceManager::UpdateDevices()
   // Update channels and set the status bit if there's new data
   for (u32 i = 0; i != MAX_SI_CHANNELS; ++i)
   {
-    // ERRLATCH bit is maintained.
-    u32 errlatch = m_channel[i].in_hi.ERRLATCH.Value();
-    switch (m_channel[i].device->GetData(m_channel[i].in_hi.hex, m_channel[i].in_lo.hex))
+    // slippi change: when polling on SI read, the device is read when the game reads the channel,
+    // so pretend there's always new data
+    if (m_poll_on_read)
     {
-    case DataResponse::Success:
       m_status_reg.hex |= GetRDSTBit(i);
-      break;
-    case DataResponse::ErrorNoResponse:
-      SetNoResponse(i);
-      [[fallthrough]];
-    case DataResponse::NoData:
-      errlatch = 1;
-      m_channel[i].in_hi.ERRSTAT = 1;
-      break;
+      continue;
     }
 
-    m_channel[i].in_hi.ERRLATCH = errlatch;
+    if (ReadDeviceData(i))
+      m_status_reg.hex |= GetRDSTBit(i);
   }
 
   UpdateInterrupts();
+}
+
+// slippi change: split out of UpdateDevices so the game's reads can use it when polling on SI read.
+// Reads a channel's device into the channel's input registers. Returns true if it had new data.
+bool SerialInterfaceManager::ReadDeviceData(u32 channel)
+{
+  // ERRLATCH bit is maintained.
+  u32 errlatch = m_channel[channel].in_hi.ERRLATCH.Value();
+  bool has_new_data = false;
+  switch (m_channel[channel].device->GetData(m_channel[channel].in_hi.hex,
+                                             m_channel[channel].in_lo.hex))
+  {
+  case DataResponse::Success:
+    has_new_data = true;
+    break;
+  case DataResponse::ErrorNoResponse:
+    SetNoResponse(channel);
+    [[fallthrough]];
+  case DataResponse::NoData:
+    errlatch = 1;
+    m_channel[channel].in_hi.ERRSTAT = 1;
+    break;
+  }
+
+  m_channel[channel].in_hi.ERRLATCH = errlatch;
+  return has_new_data;
 }
 
 SIDevices SerialInterfaceManager::GetDeviceType(int channel) const
@@ -586,6 +614,17 @@ SIDevices SerialInterfaceManager::GetDeviceType(int channel) const
     return SIDEVICE_NONE;
 
   return m_channel[channel].device->GetDeviceType();
+}
+
+// slippi change: input suggestions
+bool SerialInterfaceManager::GetGCControllerOrigin(int channel, u8 origin[6], u8* analog_mode) const
+{
+  if (!SIDevice_IsGCController(GetDeviceType(channel)))
+    return false;
+
+  const auto* device = static_cast<const CSIDevice_GCController*>(m_channel[channel].device.get());
+  device->GetReportedOrigin(origin, analog_mode);
+  return true;
 }
 
 u32 SerialInterfaceManager::GetPollXLines()
