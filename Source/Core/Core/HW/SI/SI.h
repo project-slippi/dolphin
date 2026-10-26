@@ -65,6 +65,10 @@ public:
 
   SIDevices GetDeviceType(int channel) const;
 
+  // slippi change: the origin and analog mode the game was given by the GameCube controller on a
+  // channel. Returns false if that device is not a GameCube controller.
+  bool GetGCControllerOrigin(int channel, u8 origin[6], u8* analog_mode) const;
+
   u32 GetPollXLines();
 
 private:

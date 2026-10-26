@@ -22,6 +22,7 @@
 #include "Core/HW/MMIO.h"
 #include "Core/HW/ProcessorInterface.h"
 #include "Core/HW/SI/SI_DeviceGBA.h"
+#include "Core/HW/SI/SI_DeviceGCController.h"
 #include "Core/HW/SystemTimers.h"
 #include "Core/Movie.h"
 #include "Core/NetPlayProto.h"
@@ -586,6 +587,17 @@ SIDevices SerialInterfaceManager::GetDeviceType(int channel) const
     return SIDEVICE_NONE;
 
   return m_channel[channel].device->GetDeviceType();
+}
+
+// slippi change: input suggestions
+bool SerialInterfaceManager::GetGCControllerOrigin(int channel, u8 origin[6], u8* analog_mode) const
+{
+  if (!SIDevice_IsGCController(GetDeviceType(channel)))
+    return false;
+
+  const auto* device = static_cast<const CSIDevice_GCController*>(m_channel[channel].device.get());
+  device->GetReportedOrigin(origin, analog_mode);
+  return true;
 }
 
 u32 SerialInterfaceManager::GetPollXLines()

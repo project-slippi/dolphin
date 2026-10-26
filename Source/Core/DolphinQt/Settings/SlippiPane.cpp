@@ -140,6 +140,22 @@ void SlippiPane::CreateLayout()
 
   // online_settings_layout->addRow(netplay_ip_layout);
 
+  // Input Settings
+  auto* input_settings = new QGroupBox(tr("Input Settings"));
+  auto* input_settings_layout = new QVBoxLayout();
+  input_settings->setLayout(input_settings_layout);
+  m_main_layout->addWidget(input_settings);
+
+  auto* input_suggestions_checkbox = new QCheckBox(tr("Use Input Suggestions (Experimental)"));
+  input_suggestions_checkbox->setToolTip(
+      tr("Send your newest GameCube adapter inputs to your opponent between frames, and use theirs "
+         "to predict their inputs while waiting for them. Only predictions change; the game always "
+         "runs on the real inputs."));
+  input_settings_layout->addWidget(input_suggestions_checkbox);
+  input_suggestions_checkbox->setChecked(Config::Get(Config::SLIPPI_INPUT_SUGGESTIONS));
+  connect(input_suggestions_checkbox, &QCheckBox::toggled, this,
+          [](bool checked) { Config::SetBase(Config::SLIPPI_INPUT_SUGGESTIONS, checked); });
+
   // Rank Info Settings
   auto* ranked_settings = new QGroupBox(tr("Rank Settings"));
   auto* ranked_settings_layout = new QVBoxLayout();

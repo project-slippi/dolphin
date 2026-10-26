@@ -164,6 +164,24 @@ GCPadStatus CSIDevice_GCController::GetPadStatus()
   return pad_status;
 }
 
+// slippi change: input suggestions
+GCPadStatus CSIDevice_GCController::GetPadStatusForGamePoll()
+{
+  return GetPadStatus();
+}
+
+void CSIDevice_GCController::GetReportedOrigin(u8 origin[6], u8* analog_mode) const
+{
+  origin[0] = m_origin.origin_stick_x;
+  origin[1] = m_origin.origin_stick_y;
+  origin[2] = m_origin.substick_x;
+  origin[3] = m_origin.substick_y;
+  origin[4] = m_origin.trigger_left;
+  origin[5] = m_origin.trigger_right;
+  *analog_mode = m_mode;
+}
+// slippi change: input suggestions
+
 // GetData
 
 // Return true on new data (max 7 Bytes and 6 bits ;)
@@ -172,7 +190,8 @@ GCPadStatus CSIDevice_GCController::GetPadStatus()
 //  |_ ERR_STATUS (error on last GetData or SendCmd?)
 DataResponse CSIDevice_GCController::GetData(u32& hi, u32& low)
 {
-  GCPadStatus pad_status = GetPadStatus();
+  // slippi change: input suggestions
+  GCPadStatus pad_status = GetPadStatusForGamePoll();
 
   if (!pad_status.isConnected)
     return DataResponse::ErrorNoResponse;

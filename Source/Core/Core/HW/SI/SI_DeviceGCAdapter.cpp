@@ -30,13 +30,24 @@ CSIDevice_GCAdapter::CSIDevice_GCAdapter(Core::System& system, SIDevices device,
 
 GCPadStatus CSIDevice_GCAdapter::GetPadStatus()
 {
+  return GetPadStatusImpl(false);
+}
+
+// slippi change: input suggestions
+GCPadStatus CSIDevice_GCAdapter::GetPadStatusForGamePoll()
+{
+  return GetPadStatusImpl(true);
+}
+
+GCPadStatus CSIDevice_GCAdapter::GetPadStatusImpl(bool is_game_poll)
+{
   GCPadStatus pad_status = {};
 
   // For netplay, the local controllers are polled in GetNetPads(), and
   // the remote controllers receive their status there as well
   if (!NetPlay::IsNetPlayRunning())
   {
-    pad_status = GCAdapter::Input(m_device_number);
+    pad_status = GCAdapter::Input(m_device_number, is_game_poll);
   }
 
   HandleMoviePadStatus(m_system.GetMovie(), m_device_number, &pad_status);
