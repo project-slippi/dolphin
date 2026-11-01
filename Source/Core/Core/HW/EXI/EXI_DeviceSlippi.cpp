@@ -11,6 +11,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/MemoryUtil.h"
 #include "Common/MsgHandler.h"
+#include "Common/Random.h"
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "Common/Version.h"
@@ -1316,7 +1317,8 @@ void CEXISlippi::reportInputSuggestionsFrame(s32 frame, bool is_skip, bool is_ad
         input_source_port, info.origin, &info.analog_mode);
   }
 
-  std::copy(inputs, inputs + SLIPPI_PAD_DATA_SIZE, info.sent_pad);
+  static_assert(sizeof(info.sent_pad) == SLIPPI_PAD_INPUT_SIZE, "sent_pad should hold the inputs");
+  std::copy(inputs, inputs + SLIPPI_PAD_INPUT_SIZE, info.sent_pad);
 
   SlippiInputSuggestion suggestion = slprs_input_suggestions_on_local_frame(info);
   if (suggestion.is_valid && slippi_netplay)
@@ -1810,6 +1812,11 @@ bool CEXISlippi::prepareOpponentInputs(s32 frame, bool should_skip)
 
     m_read_queue.insert(m_read_queue.end(), std::begin(predictions), std::end(predictions));
   }
+
+  // Random bits for the ASM to send with the next pad, it mixes them into the RNG seed. These are
+  // not from generator because the opponent sees them and could work out that generator's state
+  // from them.
+  m_read_queue.push_back(Common::Random::GenerateValue<u8>());
 
   // ERROR_LOG_FMT(SLIPPI_ONLINE, "EXI: [{}] %X %X %X %X %X %X %X %X", latest_frame,
   // m_read_queue[5], m_read_queue[6], m_read_queue[7], m_read_queue[8], m_read_queue[9],

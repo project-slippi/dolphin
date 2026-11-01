@@ -370,14 +370,14 @@ unsigned int SlippiNetplayClient::OnData(sf::Packet& packet, ENetPeer* peer)
       inputs_to_copy = frame64 - static_cast<s64>(head_frame);
 
       // Check that the packet actually contains the data it claims to
-      if ((pad_data_offset + inputs_to_copy * SLIPPI_PAD_DATA_SIZE) >
+      if ((pad_data_offset + inputs_to_copy * SLIPPI_PAD_WIRE_SIZE) >
           static_cast<s64>(packet.getDataSize()))
       {
         ERROR_LOG_FMT(
             SLIPPI_ONLINE,
             "Netplay packet too small to read pad buffer. Size: {}, Inputs: {}, MinSize: {}",
             static_cast<int>(packet.getDataSize()), inputs_to_copy,
-            pad_data_offset + inputs_to_copy * SLIPPI_PAD_DATA_SIZE);
+            pad_data_offset + inputs_to_copy * SLIPPI_PAD_WIRE_SIZE);
         break;
       }
 
@@ -393,7 +393,7 @@ unsigned int SlippiNetplayClient::OnData(sf::Packet& packet, ENetPeer* peer)
       {
         auto pad =
             std::make_unique<SlippiPad>(static_cast<s32>(frame64 - i),
-                                        &packet_data[pad_data_offset + i * SLIPPI_PAD_DATA_SIZE]);
+                                        &packet_data[pad_data_offset + i * SLIPPI_PAD_WIRE_SIZE]);
         m_remote_pad_queue[p_idx].push_front(std::move(pad));
       }
 
@@ -411,7 +411,7 @@ unsigned int SlippiNetplayClient::OnData(sf::Packet& packet, ENetPeer* peer)
       {
         slprs_input_suggestions_on_remote_input(
             p_idx, static_cast<s32>(static_cast<s64>(frame) - i),
-            &packet_data[pad_data_offset + i * SLIPPI_PAD_DATA_SIZE]);
+            &packet_data[pad_data_offset + i * SLIPPI_PAD_WIRE_SIZE]);
       }
     }
 
@@ -512,7 +512,7 @@ unsigned int SlippiNetplayClient::OnData(sf::Packet& packet, ENetPeer* peer)
 
     // Message id, port, target frame and seq come before the pad data
     const size_t pad_data_offset = 10;
-    if (packet.getDataSize() < pad_data_offset + SLIPPI_PAD_DATA_SIZE)
+    if (packet.getDataSize() < pad_data_offset + SLIPPI_PAD_INPUT_SIZE)
     {
       ERROR_LOG_FMT(SLIPPI_ONLINE, "Input suggestion packet too small to read pad");
       break;
@@ -1405,7 +1405,7 @@ void SlippiNetplayClient::SendSlippiPad(std::unique_ptr<SlippiPad> pad)
   *spac << m_local_pad_queue.front()->checksum;
 
   for (auto it = m_local_pad_queue.begin(); it != m_local_pad_queue.end(); ++it)
-    spac->append((*it)->pad_buf, SLIPPI_PAD_DATA_SIZE);  // only transfer 8 bytes per pad
+    spac->append((*it)->pad_buf, SLIPPI_PAD_WIRE_SIZE);  // only transfer what goes over the network
 
   SendAsync(std::move(spac));
   u64 time = Common::Timer::NowUs();
@@ -1436,7 +1436,7 @@ void SlippiNetplayClient::SendSlippiPadSuggestion(s32 target_frame, u32 seq, con
   *spac << this->m_player_idx;
   *spac << target_frame;
   *spac << seq;
-  spac->append(pad, SLIPPI_PAD_DATA_SIZE);
+  spac->append(pad, SLIPPI_PAD_INPUT_SIZE);
   SendAsync(std::move(spac));
 }
 
