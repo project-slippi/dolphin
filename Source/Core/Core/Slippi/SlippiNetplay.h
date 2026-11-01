@@ -210,7 +210,7 @@ public:
   SlippiPlayerSelections GetSlippiRemoteChatMessage(bool is_chat_enabled);
   u8 GetSlippiRemoteSentChatMessage(bool is_chat_enabled);
   s32 CalcTimeOffsetUs();
-  double GetAndResetAvgPingMs();
+  u64 GetPingUs(int index);
   bool IsWaitingForDesyncRecovery();
   SlippiDesyncRecoveryResp GetDesyncRecoveryState();
 
@@ -291,14 +291,8 @@ protected:
   SlippiSyncedGameState remote_sync_states[SLIPPI_REMOTE_PLAYER_MAX];
   SlippiSyncedGameState local_sync_state;
   std::deque<SlippiGamePrepStepResults> game_prep_step_queue;
-  u64 ping_us[SLIPPI_REMOTE_PLAYER_MAX];
-
-  // Ping accumulator for the poor-performance check. The network thread adds every ack-derived
-  // ping measurement (all remote players pooled together), and the EXI/CPU thread drains it once
-  // per performance interval via GetAndResetAvgPingMs(). This is the only ping data meant to be
-  // read off the network thread, which is why these are atomic while ping_us above is not.
-  std::atomic<u64> ping_sample_sum_us{0};
-  std::atomic<u64> ping_sample_count{0};
+  // Written by the network thread and read by the CPU thread through GetPingUs()
+  std::atomic<u64> ping_us[SLIPPI_REMOTE_PLAYER_MAX];
   int32_t last_frame_acked[SLIPPI_REMOTE_PLAYER_MAX];
   FrameOffsetData frame_offset_data[SLIPPI_REMOTE_PLAYER_MAX];
   FrameTiming last_frame_timing[SLIPPI_REMOTE_PLAYER_MAX];
