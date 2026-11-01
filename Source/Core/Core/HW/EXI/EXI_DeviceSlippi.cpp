@@ -11,6 +11,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/MemoryUtil.h"
 #include "Common/MsgHandler.h"
+#include "Common/Random.h"
 #include "Common/StringUtil.h"
 #include "Common/Thread.h"
 #include "Common/Version.h"
@@ -208,6 +209,7 @@ CEXISlippi::~CEXISlippi()
 
   SlippiSpectateServer::getInstance().endGame(true);
   slprs_input_suggestions_end_game();
+  slprs_match_quality_end_game();
 
   // Try to determine whether we were playing an in-progress ranked match, if so
   // indicate to server that this client has abandoned. Anyone trying to modify
@@ -1209,8 +1211,12 @@ void CEXISlippi::handleOnlineInputs(u8* payload)
       stall_frame_counts[i] = 0;
     }
 
-    last_interval_time_us = 0;
-    perf_debt = 0;
+    // Only ranked matches get terminated for poor quality. In other modes players can just manually
+    // leave
+    SlippiMatchQualityGameConfig match_quality = {};
+    match_quality.can_terminate = last_search.mode == SlippiMatchmaking::OnlinePlayMode::RANKED;
+    match_quality.delay = delay;
+    slprs_match_quality_start_game(match_quality);
 
     // Reset skip variables
     frames_to_skip = 0;
@@ -1252,7 +1258,13 @@ void CEXISlippi::handleOnlineInputs(u8* payload)
   // Drop inputs that we no longer need (inputs older than the finalized frame passed in)
   slippi_netplay->DropOldRemoteInputs(finalized_frame);
 
-  bool should_skip = shouldSkipOnlineFrame(frame, finalized_frame);
+  OnlineFrameSkip skip = shouldSkipOnlineFrame(frame, finalized_frame);
+  bool should_skip = skip != OnlineFrameSkip::NONE;
+
+  // Consider disconnecting from a match if quality is poor. Halted frames count too, since stalls
+  // are one of the signals
+  handleMatchQuality(frame, skip == OnlineFrameSkip::STALL);
+
   if (should_skip)
   {
     // Send inputs that have not yet been acked
@@ -1260,9 +1272,6 @@ void CEXISlippi::handleOnlineInputs(u8* payload)
   }
   else
   {
-    // Consider disconnecting from a match if performance is poor
-    handlePoorMatchPerformance(frame);
-
     // Send the input for this frame along with everything that has yet to be acked
     handleSendInputs(frame, delay, finalized_frame, finalized_frame_checksum, inputs);
   }
@@ -1308,7 +1317,8 @@ void CEXISlippi::reportInputSuggestionsFrame(s32 frame, bool is_skip, bool is_ad
         input_source_port, info.origin, &info.analog_mode);
   }
 
-  std::copy(inputs, inputs + SLIPPI_PAD_DATA_SIZE, info.sent_pad);
+  static_assert(sizeof(info.sent_pad) == SLIPPI_PAD_INPUT_SIZE, "sent_pad should hold the inputs");
+  std::copy(inputs, inputs + SLIPPI_PAD_INPUT_SIZE, info.sent_pad);
 
   SlippiInputSuggestion suggestion = slprs_input_suggestions_on_local_frame(info);
   if (suggestion.is_valid && slippi_netplay)
@@ -1316,103 +1326,35 @@ void CEXISlippi::reportInputSuggestionsFrame(s32 frame, bool is_skip, bool is_ad
                                             suggestion.pad);
 }
 
-void CEXISlippi::handlePoorMatchPerformance(s32 frame)
+// Reports every pass through the online frame handler to the match quality tracker, which judges
+// the match from stalls, rollback depth and frame timing. It decides when a match is too degraded
+// to continue.
+void CEXISlippi::handleMatchQuality(s32 frame, bool is_stall)
 {
-  // Only handle poor match performance in ranked. In other modes players can just manually leave.
-  // Plus ranked is mostly where it matters
-  if (last_search.mode != SlippiMatchmaking::OnlinePlayMode::RANKED)
+  // Ranked is 1v1, so the sole opponent's inputs are the ones that matter
+  auto pad = slippi_netplay->GetSlippiRemotePad(0, ROLLBACK_MAX_FRAMES);
+
+  SlippiMatchQualityFrame info = {};
+  info.frame = frame;
+  info.time_us = Common::Timer::NowUs();
+  info.is_stall = is_stall;
+  info.latest_remote_frame = pad->latest_frame;
+  info.ping_us = slippi_netplay->GetPingUs(0);
+  if (!slprs_match_quality_on_frame(info))
     return;
 
-  if (!slippi_netplay)
-    return;
-
-  u64 interval_frames = 150;  // Check every 2.5 seconds
-  u64 frame_time_us = 16683;
-
-  // Skip the first 50 frames of the game and check timing info every interval
-  if ((frame + (interval_frames - 50)) % interval_frames != 0)
-    return;
-
-  // The modifier increases if we've been in a game for a minute. At that point, make it a little
-  // harder for the debt to accumulate to failure
-  double modifier = frame > 3600 ? 1.15 : 1.0;
-
-  auto cur_time_us = Common::Timer::NowUs();
-
-  // Iniitalize the first instance
-  if (last_interval_time_us == 0)
-  {
-    last_interval_time_us = cur_time_us;
-    // Discard ping samples collected before this point so the first processed interval's
-    // average covers exactly one interval instead of everything since connection start
-    slippi_netplay->GetAndResetAvgPingMs();
-    return;  // We will start processing the next time
-  }
-
-  auto expected_time_us = frame_time_us * interval_frames;
-  double ratio = static_cast<double>(cur_time_us - last_interval_time_us) /
-                 static_cast<double>(expected_time_us);
-  last_interval_time_us = cur_time_us;
-
-  // Leaky accumulator: each interval adds "debt" proportional to how far over the expected
-  // duration we ran, and healthy intervals pay it back down. We only terminate once enough debt
-  // builds up, so a single hitch (local or otherwise) is survivable but sustained degradation
-  // isn't. The decay keeps this independent of match length: scattered blips drain away before
-  // they can accumulate to the termination threshold.
-  s32 terminate_threshold = 30;
-  s32 speed_debt;
-  if (ratio >= 1.0 + 0.75 * modifier)
-    speed_debt = 15;  // Severe
-  else if (ratio >= 1.0 + 0.5 * modifier)
-    speed_debt = 8;  // Bad
-  else if (ratio >= 1.0 + 0.1 * modifier)
-    speed_debt = 4;  // Mild
-  else
-    speed_debt = -1;  // Healthy interval, pay down accumulated debt
-
-  // High ping feeds the same accumulator. Averaging over the interval (~150 samples) means a
-  // brief spike gets diluted while sustained high ping keeps every interval elevated. The mild
-  // tier starts just above the 90ms "playable" line; against the -1 decay, a connection
-  // oscillating around that line net-accumulates once it spends over a fifth of its time above
-  // it, and a constantly-mild connection terminates in 8 intervals (~20s). An average of 0 means
-  // no acks arrived this interval; the speed ratio handles that case.
-  double avg_ping_ms = slippi_netplay->GetAndResetAvgPingMs();
-  s32 ping_debt;
-  if (avg_ping_ms >= 200 * modifier)
-    ping_debt = 15;  // Severe
-  else if (avg_ping_ms >= 120 * modifier)
-    ping_debt = 8;  // Bad
-  else if (avg_ping_ms >= 90 * modifier)
-    ping_debt = 4;  // Mild
-  else
-    ping_debt = -1;  // Healthy interval, pay down accumulated debt
-
-  // Take the worse of the two signals rather than summing: a network problem often inflates both
-  // (waiting on remote inputs stretches the interval and delays acks), so summing would
-  // double-count a single underlying cause
-  s32 debt = std::max(speed_debt, ping_debt);
-
-  perf_debt = std::max(0, perf_debt + debt);
-  INFO_LOG_FMT(SLIPPI_ONLINE,
-               "Modifying performance debt by {} (speed: {}, ping: {}, avg_ping_ms: {:.1f}). "
-               "Currently at: {}/{}",
-               debt, speed_debt, ping_debt, avg_ping_ms, perf_debt, terminate_threshold);
-  if (perf_debt >= terminate_threshold)
-  {
-    // Tell the server about the poor performance, then drop all remote players with a
-    // POOR_PERFORMANCE reason. Flipping the connection to DISCONNECTED lets the existing
-    // disconnect-detection path end the game naturally (next handleOnlineInputs sees
-    // isDisconnected()), same as a real disconnect. The reason rides the disconnect to the
-    // peer so both clients surface the OSD message from the shared disconnect path below.
-    slprs_exi_device_report_match_status(slprs_exi_device_ptr, recent_mm_result.id.c_str(),
-                                         "poor_performance", true);
-    slippi_netplay->ForceDisconnect(SlippiNetplayClient::SlippiDisconnectReason::POOR_PERFORMANCE);
-    ERROR_LOG_FMT(SLIPPI_ONLINE, "Match terminated due to poor performance. {}/{}", perf_debt,
-                  terminate_threshold);
-  }
+  // Tell the server about the poor performance, then drop all remote players with a
+  // POOR_PERFORMANCE reason. Flipping the connection to DISCONNECTED lets the existing
+  // disconnect-detection path end the game naturally (next handleOnlineInputs sees
+  // isDisconnected()), same as a real disconnect. The reason rides the disconnect to the
+  // peer so both clients surface the OSD message from the shared disconnect path below.
+  slprs_exi_device_report_match_status(slprs_exi_device_ptr, recent_mm_result.id.c_str(),
+                                       "poor_performance", true);
+  slippi_netplay->ForceDisconnect(SlippiNetplayClient::SlippiDisconnectReason::POOR_PERFORMANCE);
+  ERROR_LOG_FMT(SLIPPI_ONLINE, "Match terminated due to poor performance on frame {}", frame);
 }
 
-bool CEXISlippi::shouldSkipOnlineFrame(s32 frame, s32 finalized_frame)
+CEXISlippi::OnlineFrameSkip CEXISlippi::shouldSkipOnlineFrame(s32 frame, s32 finalized_frame)
 {
   auto status = slippi_netplay->GetSlippiConnectStatus();
   bool connection_failed =
@@ -1422,7 +1364,7 @@ bool CEXISlippi::shouldSkipOnlineFrame(s32 frame, s32 finalized_frame)
   if (connection_failed || connection_disconnected)
   {
     // If connection failed just continue the game
-    return false;
+    return OnlineFrameSkip::NONE;
   }
 
   // Check each active remote player individually. If any single player is short on
@@ -1471,7 +1413,7 @@ bool CEXISlippi::shouldSkipOnlineFrame(s32 frame, s32 finalized_frame)
   }
 
   if (any_player_needs_inputs)
-    return true;
+    return OnlineFrameSkip::STALL;
 
   s32 frame_time = 16683;
   s32 t1 = 10000;
@@ -1518,12 +1460,12 @@ bool CEXISlippi::shouldSkipOnlineFrame(s32 frame, s32 finalized_frame)
     // If ahead by 60% of a frame, stall. I opted to use 60% instead of half a frame
     // because I was worried about two systems continuously stalling for each other
     frames_to_skip = frames_to_skip - 1;
-    return true;
+    return OnlineFrameSkip::TIME_SYNC;
   }
 
   is_currently_skipping = false;
 
-  return false;
+  return OnlineFrameSkip::NONE;
 }
 
 bool CEXISlippi::shouldAdvanceOnlineFrame(s32 frame)
@@ -1870,6 +1812,11 @@ bool CEXISlippi::prepareOpponentInputs(s32 frame, bool should_skip)
 
     m_read_queue.insert(m_read_queue.end(), std::begin(predictions), std::end(predictions));
   }
+
+  // Random bits for the ASM to send with the next pad, it mixes them into the RNG seed. These are
+  // not from generator because the opponent sees them and could work out that generator's state
+  // from them.
+  m_read_queue.push_back(Common::Random::GenerateValue<u8>());
 
   // ERROR_LOG_FMT(SLIPPI_ONLINE, "EXI: [{}] %X %X %X %X %X %X %X %X", latest_frame,
   // m_read_queue[5], m_read_queue[6], m_read_queue[7], m_read_queue[8], m_read_queue[9],
@@ -3505,6 +3452,7 @@ void CEXISlippi::DMAWrite(u32 _uAddr, u32 _uSize)
         slprs_exi_device_reporter_push_replay_data(slprs_exi_device_ptr, &mem_ptr[buf_loc],
                                                    payload_len + 1);
       slprs_input_suggestions_end_game();
+      slprs_match_quality_end_game();
       break;
     case CMD_PREPARE_REPLAY:
       prepareGameInfo(&mem_ptr[buf_loc + 1]);

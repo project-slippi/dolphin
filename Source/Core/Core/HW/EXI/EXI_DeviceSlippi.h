@@ -242,8 +242,16 @@ private:
   void startFindMatch(u8* payload);
   void prepareOnlineMatchState();
   void setMatchSelections(u8* payload);
-  bool shouldSkipOnlineFrame(s32 frame, s32 finalized_frame);
-  void handlePoorMatchPerformance(s32 frame);
+
+  // Why a frame is being held back instead of sent
+  enum class OnlineFrameSkip
+  {
+    NONE,
+    STALL,      // The opponent's inputs are past the rollback limit
+    TIME_SYNC,  // We are running ahead of the opponent
+  };
+  OnlineFrameSkip shouldSkipOnlineFrame(s32 frame, s32 finalized_frame);
+  void handleMatchQuality(s32 frame, bool is_stall);
   bool shouldAdvanceOnlineFrame(s32 frame);
   bool opponentRunahead();
   void handleLogInRequest();
@@ -295,9 +303,6 @@ private:
   std::vector<u8> gecko_list;
 
   u32 stall_frame_counts[SLIPPI_REMOTE_PLAYER_MAX] = {};
-  u64 last_interval_time_us = 0;
-  // Leaky accumulator of poor-performance intervals (see handlePoorMatchPerformance)
-  s32 perf_debt = 0;
 
   std::vector<u8> m_read_queue;
   std::unique_ptr<Slippi::SlippiGame> m_current_game = nullptr;

@@ -370,14 +370,14 @@ unsigned int SlippiNetplayClient::OnData(sf::Packet& packet, ENetPeer* peer)
       inputs_to_copy = frame64 - static_cast<s64>(head_frame);
 
       // Check that the packet actually contains the data it claims to
-      if ((pad_data_offset + inputs_to_copy * SLIPPI_PAD_DATA_SIZE) >
+      if ((pad_data_offset + inputs_to_copy * SLIPPI_PAD_WIRE_SIZE) >
           static_cast<s64>(packet.getDataSize()))
       {
         ERROR_LOG_FMT(
             SLIPPI_ONLINE,
             "Netplay packet too small to read pad buffer. Size: {}, Inputs: {}, MinSize: {}",
             static_cast<int>(packet.getDataSize()), inputs_to_copy,
-            pad_data_offset + inputs_to_copy * SLIPPI_PAD_DATA_SIZE);
+            pad_data_offset + inputs_to_copy * SLIPPI_PAD_WIRE_SIZE);
         break;
       }
 
@@ -393,7 +393,7 @@ unsigned int SlippiNetplayClient::OnData(sf::Packet& packet, ENetPeer* peer)
       {
         auto pad =
             std::make_unique<SlippiPad>(static_cast<s32>(frame64 - i),
-                                        &packet_data[pad_data_offset + i * SLIPPI_PAD_DATA_SIZE]);
+                                        &packet_data[pad_data_offset + i * SLIPPI_PAD_WIRE_SIZE]);
         m_remote_pad_queue[p_idx].push_front(std::move(pad));
       }
 
@@ -411,7 +411,7 @@ unsigned int SlippiNetplayClient::OnData(sf::Packet& packet, ENetPeer* peer)
       {
         slprs_input_suggestions_on_remote_input(
             p_idx, static_cast<s32>(static_cast<s64>(frame) - i),
-            &packet_data[pad_data_offset + i * SLIPPI_PAD_DATA_SIZE]);
+            &packet_data[pad_data_offset + i * SLIPPI_PAD_WIRE_SIZE]);
       }
     }
 
@@ -484,8 +484,6 @@ unsigned int SlippiNetplayClient::OnData(sf::Packet& packet, ENetPeer* peer)
     ack_timers[p_idx].Pop();
 
     ping_us[p_idx] = Common::Timer::NowUs() - send_time;
-    ping_sample_sum_us.fetch_add(ping_us[p_idx], std::memory_order_relaxed);
-    ping_sample_count.fetch_add(1, std::memory_order_relaxed);
     if (Config::Get(Config::GFX_SHOW_NETPLAY_PING) && frame % SLIPPI_PING_DISPLAY_INTERVAL == 0 &&
         p_idx == 0)
     {
@@ -514,7 +512,7 @@ unsigned int SlippiNetplayClient::OnData(sf::Packet& packet, ENetPeer* peer)
 
     // Message id, port, target frame and seq come before the pad data
     const size_t pad_data_offset = 10;
-    if (packet.getDataSize() < pad_data_offset + SLIPPI_PAD_DATA_SIZE)
+    if (packet.getDataSize() < pad_data_offset + SLIPPI_PAD_INPUT_SIZE)
     {
       ERROR_LOG_FMT(SLIPPI_ONLINE, "Input suggestion packet too small to read pad");
       break;
@@ -800,6 +798,17 @@ void SlippiNetplayClient::Send(sf::Packet& packet)
   }
 }
 
+// By default ENet deliberately drops unreliable packets while round trip time is rising, and our
+// pads and acks are all unreliable. Those drops turn a latency increase into gaps in the opponent's
+// inputs, which causes stalls. Our traffic is far too small for backing off to relieve any
+// congestion. A deceleration of 0 keeps the throttle at full, and ENet also sends this setting to
+// the peer, so it stops throttling the packets it sends us too.
+static void disablePacketThrottleDrops(ENetPeer* peer)
+{
+  enet_peer_throttle_configure(peer, ENET_PEER_PACKET_THROTTLE_INTERVAL,
+                               ENET_PEER_PACKET_THROTTLE_ACCELERATION, 0);
+}
+
 void SlippiNetplayClient::Disconnect()
 {
   ENetEvent net_event;
@@ -928,6 +937,8 @@ void SlippiNetplayClient::ThreadFunc()
           INFO_LOG_FMT(SLIPPI_ONLINE, "[Netplay] got connect event with nil peer");
           continue;
         }
+
+        disablePacketThrottleDrops(net_event.peer);
 
         std::stringstream key_strm;
         key_strm << net_event.peer->address.host << "-" << net_event.peer->address.port;
@@ -1225,6 +1236,8 @@ void SlippiNetplayClient::ThreadFunc()
       }
       case ENET_EVENT_TYPE_CONNECT:
       {
+        disablePacketThrottleDrops(net_event.peer);
+
         std::stringstream key_strm;
         key_strm << net_event.peer->address.host << "-" << net_event.peer->address.port;
 
@@ -1392,7 +1405,7 @@ void SlippiNetplayClient::SendSlippiPad(std::unique_ptr<SlippiPad> pad)
   *spac << m_local_pad_queue.front()->checksum;
 
   for (auto it = m_local_pad_queue.begin(); it != m_local_pad_queue.end(); ++it)
-    spac->append((*it)->pad_buf, SLIPPI_PAD_DATA_SIZE);  // only transfer 8 bytes per pad
+    spac->append((*it)->pad_buf, SLIPPI_PAD_WIRE_SIZE);  // only transfer what goes over the network
 
   SendAsync(std::move(spac));
   u64 time = Common::Timer::NowUs();
@@ -1423,7 +1436,7 @@ void SlippiNetplayClient::SendSlippiPadSuggestion(s32 target_frame, u32 seq, con
   *spac << this->m_player_idx;
   *spac << target_frame;
   *spac << seq;
-  spac->append(pad, SLIPPI_PAD_DATA_SIZE);
+  spac->append(pad, SLIPPI_PAD_INPUT_SIZE);
   SendAsync(std::move(spac));
 }
 
@@ -1738,20 +1751,10 @@ SlippiMatchInfo* SlippiNetplayClient::GetMatchInfo()
   return &match_info;
 }
 
-// Drains the ping accumulator and returns the average ping (in ms) across all measurements taken
-// since the last call. Returns 0 if there were no measurements (e.g. a full stall), which callers
-// should treat as "no signal" rather than a great connection — the speed ratio check covers that
-// case. The two exchanges aren't atomic as a pair, so a sample landing between them can be
-// attributed to the wrong interval; at one sample per frame that skews an interval average by a
-// negligible amount and is not worth a lock.
-double SlippiNetplayClient::GetAndResetAvgPingMs()
+// The most recent ping measurement in microseconds, or 0 if there hasn't been one yet
+u64 SlippiNetplayClient::GetPingUs(int index)
 {
-  u64 sum_us = ping_sample_sum_us.exchange(0, std::memory_order_relaxed);
-  u64 count = ping_sample_count.exchange(0, std::memory_order_relaxed);
-  if (count == 0)
-    return 0.0;
-
-  return static_cast<double>(sum_us) / static_cast<double>(count) / 1000.0;
+  return ping_us[index].load(std::memory_order_relaxed);
 }
 
 // return the smallest time offset among all remote players
