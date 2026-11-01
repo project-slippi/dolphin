@@ -56,6 +56,8 @@ namespace Config
 
 // Netplay Settings
 extern const Info<int> SLIPPI_ONLINE_DELAY;
+extern const Info<bool> SLIPPI_INPUT_SUGGESTIONS;
+extern const Info<bool> SLIPPI_POLL_ON_SI_READ;
 extern const Info<bool> SLIPPI_ENABLE_SPECTATOR;
 extern const Info<int> SLIPPI_SPECTATOR_LOCAL_PORT;
 extern const Info<bool> SLIPPI_SAVE_REPLAYS;
