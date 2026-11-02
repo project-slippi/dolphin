@@ -31,6 +31,7 @@ private:
   void ToggleJukebox(bool checked);
   void ToggleLocalRankInfo(bool checked);
   void ToggleOpponentRankInfo(bool checked);
+  void ToggleDiscordRichPresence(bool checked);
   void SetForceNetplayPort(bool checked);
   void OnMusicVolumeUpdate(int volume);
   void CreateLayout();
@@ -60,4 +61,7 @@ private:
   // Ranked Settings
   QCheckBox* m_enable_local_rank;
   QCheckBox* m_enable_opp_rank;
+
+  // Discord Settings
+  QCheckBox* m_enable_discord_rpc;
 };
