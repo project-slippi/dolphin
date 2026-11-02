@@ -38,6 +38,18 @@
 #define SLIPPI_REMOTE_PLAYER_MAX 3
 #define SLIPPI_REMOTE_PLAYER_COUNT 3
 #define SLIPPI_PLAYER_COUNT_MAX (SLIPPI_REMOTE_PLAYER_MAX + 1)
+// How many of a dropped player's latest inputs to send the other players. One client's inputs can
+// only get so far ahead of another's before the rollback limit halts the game: the rollback limit
+// on both clients plus both of their delays. That's at most 2 * 7 + 2 * 15 = 44 frames, so this is
+// plenty and still fits in one packet.
+#define SLIPPI_DROP_REPORT_INPUT_COUNT 64
+// How long to wait for the other players' reports about a dropped player before settling on their
+// last input
+#define SLIPPI_DROP_REPORT_WAIT_MS 300
+// How many frames after a dropped player's last input their fighter despawns. A client can be past
+// the input it has by the rollback limit of 7 while waiting, so this leaves room for everyone to
+// settle before reaching the frame.
+#define SLIPPI_DROP_DESPAWN_FRAMES (2 * 7 + 2)
 
 struct SlippiRemotePadOutput
 {
@@ -46,6 +58,8 @@ struct SlippiRemotePadOutput
   u32 checksum{};
   u8 player_idx{};
   bool is_disconnected = false;
+  // The frame a dropped player's fighter despawns on, or 0 until we settle on their last input
+  s32 despawn_frame = 0;
   std::vector<u8> data{};
 };
 
@@ -206,6 +220,7 @@ public:
   void ForceDisconnectPlayer(u8 playerIdx);
   void ForceDisconnect(SlippiDisconnectReason reason = SlippiDisconnectReason::UNSPECIFIED);
   SlippiDisconnectReason GetDisconnectReason();
+  void FillDroppedPlayerInputs(s32 frame);
   SlippiMatchInfo* GetMatchInfo();
   SlippiPlayerSelections GetSlippiRemoteChatMessage(bool is_chat_enabled);
   u8 GetSlippiRemoteSentChatMessage(bool is_chat_enabled);
@@ -286,6 +301,10 @@ protected:
   std::deque<std::unique_ptr<SlippiPad>> m_local_pad_queue;  // most recent inputs at start of deque
   std::deque<std::unique_ptr<SlippiPad>>
       m_remote_pad_queue[SLIPPI_REMOTE_PLAYER_MAX];  // most recent inputs at start of deque
+  // The latest inputs from each remote player, most recent first. m_remote_pad_queue only holds
+  // what the game might still need, this also has what another client might still be missing if the
+  // player drops.
+  std::deque<SlippiPad> m_remote_pad_history[SLIPPI_REMOTE_PLAYER_MAX];
   bool is_desync_recovery = false;
   ChecksumEntry remote_checksums[SLIPPI_REMOTE_PLAYER_MAX];
   SlippiSyncedGameState remote_sync_states[SLIPPI_REMOTE_PLAYER_MAX];
@@ -310,6 +329,12 @@ protected:
       static_cast<u32>(SlippiDisconnectReason::UNSPECIFIED)};
   std::atomic<u32> m_disconnect_reason{static_cast<u32>(SlippiDisconnectReason::UNSPECIFIED)};
 
+  // Player drops, by port. The network thread publishes the despawn frames for the EXI thread, with
+  // 0 until it settles on the player's last input. The times are when we lost the player, only for
+  // the network thread.
+  std::atomic<s32> m_despawn_frames[SLIPPI_PLAYER_COUNT_MAX] = {};
+  u64 m_player_drop_times_ms[SLIPPI_PLAYER_COUNT_MAX] = {};
+
   std::vector<int> failed_connections;
   SlippiMatchInfo match_info;
 
@@ -326,6 +351,10 @@ private:
   // Network-thread only — call from inside ThreadFunc.
   bool AreAllConnectionsDisconnected();
   bool AreAllPeersDisconnectedForKey(const std::string& key);
+  void AddRemotePad(u8 p_idx, s32 frame, u8* pad_data);
+  bool ProcessPlayerDrops();
+  void SendPlayerDropReport(u8 port);
+  void AddPlayerDropReportInputs(u8 p_idx, s32 last_frame, u8 input_count, const u8* inputs);
 
   bool m_is_connected = false;
 
