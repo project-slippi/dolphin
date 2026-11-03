@@ -610,9 +610,12 @@ if(ENABLE_EVDEV)
   endif()
 endif()
 
-if(UNIX)
+if(UNIX OR WIN32)
   message(STATUS "Using named pipes as controller inputs")
   add_definitions(-DUSE_PIPES=1)
+endif()
+
+if(UNIX)
   message(STATUS "Watching game memory for changes")
   add_definitions(-DUSE_MEMORYWATCHER=1)
 endif()
