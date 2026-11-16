@@ -1291,8 +1291,15 @@ void CEXISlippi::handleOnlineInputs(u8* payload)
 
 void CEXISlippi::startInputSuggestions(u8 delay, u8 input_source_port)
 {
+  // Suggestions smooth the connection between two humans. A bot is expected to make the connection
+  // feel good for the human on its own, for example by running ahead, so they are off whenever a bot
+  // is in the game, on our side or theirs. Bots are registered bot accounts
+  bool is_bot_in_game = false;
+  for (const auto& player : matchmaking->GetPlayerInfo())
+    is_bot_in_game |= player.is_bot;
+
   SlippiInputSuggestionsGameConfig game = {};
-  game.enabled = Config::Get(Config::SLIPPI_INPUT_SUGGESTIONS);
+  game.enabled = Config::Get(Config::SLIPPI_INPUT_SUGGESTIONS) && !is_bot_in_game;
   game.local_player_idx = static_cast<u8>(matchmaking->LocalPlayerIndex());
   game.remote_player_count = matchmaking->RemotePlayerCount();
   game.delay = delay;
