@@ -10,6 +10,10 @@ CMAKE_FLAGS="-DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DQT_DIR=${QT_BREW_PATH}/lib/cma
 if [[ $(arch) == 'arm64' ]]; then
   CMAKE_FLAGS+=" -DUSE_SYSTEM_XXHASH=OFF"
 fi
+
+# Homebrew's SDL2 is sdl2-compat, which loads SDL3 at runtime. We don't ship
+# SDL3, so build the bundled SDL2 statically instead.
+CMAKE_FLAGS+=" -DUSE_SYSTEM_SDL2=OFF"
 export LIBRARY_PATH=$LIBRARY_PATH:/usr/local/lib:/usr/lib/
 
 # Build type
