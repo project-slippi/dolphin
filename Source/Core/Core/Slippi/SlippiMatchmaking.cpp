@@ -309,7 +309,18 @@ void SlippiMatchmaking::startMatchmaking()
   retry_count = 0;
   while (m_client == nullptr && retry_count < 15)
   {
-    if (Config::Get(Config::SLIPPI_FORCE_NETPLAY_PORT))
+    bool custom_port = Config::Get(Config::SLIPPI_FORCE_NETPLAY_PORT);
+
+    // A forced port can still be held by the previous session, which is torn down in the
+    // background and keeps it for about three seconds after a set while it disconnects. Spread the
+    // attempts over that long instead of failing all of them at once.
+    if (custom_port && retry_count > 0)
+      Common::SleepCurrentThread(225);
+
+    if (is_mm_terminated)
+      return;
+
+    if (custom_port)
       m_host_port = Config::Get(Config::SLIPPI_NETPLAY_PORT);
     else
       m_host_port = 41000 + (generator() % 10000);
